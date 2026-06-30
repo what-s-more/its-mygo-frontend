@@ -27,8 +27,10 @@ export type PageResult<T> = {
 }
 
 export const productService = {
-  listProducts() {
-    return http.get<unknown, { data: PageResult<ProductListItem> }>('/products')
+  listProducts(page = 1, pageSize = 12) {
+    return http.get<unknown, { data: PageResult<ProductListItem> }>('/products', {
+      params: { page, page_size: pageSize },
+    })
   },
 
   getProduct(productId: number) {

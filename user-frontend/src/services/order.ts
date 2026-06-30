@@ -1,4 +1,5 @@
 import { http } from './http'
+import type { Address } from './address'
 
 export type CartItem = {
   sku_id: number
@@ -13,6 +14,7 @@ export type CartItem = {
 
 export type CheckoutResult = {
   items: CartItem[]
+  addresses: Address[]
   total_amount_cent: number
   discount_amount_cent: number
   pay_amount_cent: number
@@ -36,6 +38,12 @@ export type Order = {
   status: string
   total_amount_cent: number
   pay_amount_cent: number
+  source_post_id?: number | null
+  source_user_id?: number | null
+  logistics_company?: string | null
+  tracking_no?: string | null
+  shipped_at?: string | null
+  received_at?: string | null
   items: OrderItem[]
 }
 
@@ -46,7 +54,13 @@ export type Review = {
 
 export type Refund = {
   id: number
+  order_id: number
+  user_id: number
+  refund_amount_cent: number
+  reason_type: string
+  reason: string
   status: string
+  origin_order_status: string
 }
 
 export type PageResult<T> = {
@@ -69,7 +83,12 @@ export const orderService = {
     return http.post<unknown, { data: CheckoutResult }>('/cart/checkout', {})
   },
 
-  createOrder(payload: { client_order_token: string }) {
+  createOrder(payload: {
+    client_order_token: string
+    shipping_address_id?: number | null
+    coupon_id?: number | null
+    source_post_id?: number | null
+  }) {
     return http.post<unknown, { data: { payment_id: number; order_ids: number[]; pay_amount_cent: number } }>(
       '/orders',
       payload,
@@ -80,8 +99,10 @@ export const orderService = {
     return http.post(`/payments/${paymentId}/pay`)
   },
 
-  listOrders() {
-    return http.get<unknown, { data: PageResult<Order> }>('/orders')
+  listOrders(page = 1, pageSize = 12) {
+    return http.get<unknown, { data: PageResult<Order> }>('/orders', {
+      params: { page, page_size: pageSize },
+    })
   },
 
   confirmOrder(orderId: number) {
@@ -92,7 +113,7 @@ export const orderService = {
     return http.post<unknown, { data: Review }>(`/orders/${orderId}/reviews`, payload)
   },
 
-  applyRefund(orderId: number, payload: { reason: string }) {
+  applyRefund(orderId: number, payload: { reason_type?: string; reason: string; refund_amount_cent?: number }) {
     return http.post<unknown, { data: Refund }>(`/orders/${orderId}/refunds`, payload)
   },
 }

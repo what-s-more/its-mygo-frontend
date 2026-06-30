@@ -1,40 +1,38 @@
-import { FormEvent, useState } from 'react'
+import { App, Button, Card, Form, Input } from 'antd'
 import { useNavigate } from 'react-router-dom'
-
 import { authService } from '../../services/auth'
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const [account, setAccount] = useState('')
-  const [password, setPassword] = useState('')
-  const [message, setMessage] = useState('')
+  const { message } = App.useApp()
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setMessage('')
+  async function handleSubmit(values: { account: string; password: string }) {
     try {
-      await authService.login({ account, password })
+      await authService.login(values)
+      message.success('登录成功')
       navigate('/user')
     } catch {
-      setMessage('登录失败，请检查账号和密码')
+      message.error('登录失败，请检查账号和密码')
     }
   }
 
   return (
-    <main>
-      <h1>用户登录</h1>
-      <form onSubmit={handleSubmit}>
-        <label>
-          手机号
-          <input value={account} onChange={(event) => setAccount(event.target.value)} />
-        </label>
-        <label>
-          密码
-          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-        </label>
-        <button type="submit">登录</button>
-      </form>
-      {message && <p>{message}</p>}
-    </main>
+    <div style={{ maxWidth: 400, margin: '40px auto' }}>
+      <Card title="用户登录">
+        <Form onFinish={handleSubmit} layout="vertical">
+          <Form.Item name="account" label="手机号" rules={[{ required: true, message: '请输入手机号' }]}>
+            <Input placeholder="手机号" />
+          </Form.Item>
+          <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}>
+            <Input.Password placeholder="密码" />
+          </Form.Item>
+          <Form.Item>
+            <Button type="primary" htmlType="submit" block>
+              登录
+            </Button>
+          </Form.Item>
+        </Form>
+      </Card>
+    </div>
   )
 }
