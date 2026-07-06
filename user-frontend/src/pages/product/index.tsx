@@ -1,151 +1,319 @@
-import { useCallback, useEffect, useState } from 'react'
-import { App, Button, Card, Input, List, Modal, Radio, Space, Table, Tag, Typography } from 'antd'
-import { ShoppingCartOutlined } from '@ant-design/icons'
-import { productService, type ProductDetail, type ProductListItem } from '../../services/product'
-import { orderService } from '../../services/order'
-import { DataPanel } from '../../components/DataPanel'
-import { usePage } from '../../hooks/usePage'
+import {
+  Button,
+  Card,
+  Empty,
+  Image,
+  Input,
+  InputNumber,
+  Pagination,
+  Select,
+  Skeleton,
+  Space,
+  Tag,
+  Typography,
+  message,
+} from 'antd'
+import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { getApiErrorMessage } from '../../services/http'
+import {
+  productService,
+  type Category,
+  type ProductListItem,
+} from '../../services/product'
+import { absoluteAssetUrl, yuan } from '../../utils/format'
 
-const { Text, Paragraph } = Typography
+const { Text } = Typography
 
-function yuan(v?: number | null) {
-  return ((v ?? 0) / 100).toFixed(2)
+type CategoryTreeItem = Category & {
+  label: string
+  depth: number
+  parentName?: string
+}
+
+type PageData<T> = {
+  list?: T[]
+  total?: number
+  page?: number
+  page_size?: number
 }
 
 export function ProductPage() {
-  const { message } = App.useApp()
+  const [categories, setCategories] = useState<Category[]>([])
+  const [categoryId, setCategoryId] = useState<number | undefined>()
   const [keyword, setKeyword] = useState('')
-  const [detail, setDetail] = useState<ProductDetail | null>(null)
-  const [detailOpen, setDetailOpen] = useState(false)
-  const [selectedSkuId, setSelectedSkuId] = useState<number | null>(null)
-  const [quantity, setQuantity] = useState(1)
+  const [minPriceYuan, setMinPriceYuan] = useState<number | null>(null)
+  const [maxPriceYuan, setMaxPriceYuan] = useState<number | null>(null)
+  const [productSort, setProductSort] = useState('newest:desc')
+  const [products, setProducts] = useState<ProductListItem[]>([])
+  const [productPage, setProductPage] = useState(1)
+  const [productPageSize, setProductPageSize] = useState(12)
+  const [productTotal, setProductTotal] = useState(0)
+  const [loading, setLoading] = useState(false)
 
-  const fetchProducts = useCallback(
-    (page: number, pageSize: number) => productService.listProducts(page, pageSize),
-    [],
-  )
-  const { page, pageSize, total, list, loading, load, changePage, lastResult, setLastResult } = usePage<ProductListItem>(fetchProducts)
+  const categoryTree = useMemo<CategoryTreeItem[]>(() => {
+    const childrenByParent = new Map<number | null, Category[]>()
+    categories.forEach((category) => {
+      const parentId = category.parent_id ?? null
+      childrenByParent.set(parentId, [...(childrenByParent.get(parentId) ?? []), category])
+    })
+    childrenByParent.forEach((items) => items.sort((a, b) => a.sort_order - b.sort_order || a.id - b.id))
+    const walk = (parent: Category, depth: number, ancestors: string[]): CategoryTreeItem[] => {
+      const labelParts = [...ancestors, parent.name]
+      const children = childrenByParent.get(parent.id) ?? []
+      return [
+        {
+          ...parent,
+          label: labelParts.join(' / '),
+          depth,
+          parentName: ancestors[ancestors.length - 1],
+        },
+        ...children.flatMap((child) => walk(child, depth + 1, labelParts)),
+      ]
+    }
+    return (childrenByParent.get(null) ?? []).flatMap((parent) => walk(parent, 1, []))
+  }, [categories])
+
+  async function loadCategories() {
+    try {
+      const response = await productService.listCategories()
+      setCategories((response.data as Category[]) ?? [])
+    } catch (error) {
+      message.error(`分类列表加载失败：${getApiErrorMessage(error)}`)
+    }
+  }
+
+  async function loadProducts(nextCategoryId = categoryId, nextPage = productPage, nextPageSize = productPageSize) {
+    // 前端校验：最低价大于最高价时不发送请求
+    if (minPriceYuan !== null && maxPriceYuan !== null && minPriceYuan > maxPriceYuan) {
+      return
+    }
+    const [sortBy, sortOrder] = productSort.split(':')
+    setLoading(true)
+    try {
+      const response = await productService.listProducts({
+        keyword: keyword || undefined,
+        category_id: nextCategoryId,
+        min_price_cent: minPriceYuan === null ? undefined : Math.round(minPriceYuan * 100),
+        max_price_cent: maxPriceYuan === null ? undefined : Math.round(maxPriceYuan * 100),
+        sort_by: sortBy,
+        sort_order: sortOrder,
+        page: nextPage,
+        page_size: nextPageSize,
+      })
+      const data = response.data as PageData<ProductListItem>
+      setProducts(data?.list ?? [])
+      setProductTotal(data?.total ?? 0)
+      setProductPage(data?.page ?? nextPage)
+      setProductPageSize(data?.page_size ?? nextPageSize)
+    } catch (error) {
+      message.error(`商品列表加载失败：${getApiErrorMessage(error)}`)
+      setProducts([])
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    void load(1)
-  }, [load])
+    void loadCategories()
+    void loadProducts(undefined, 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  async function openProduct(productId: number) {
-    try {
-      const r = await productService.getProduct(productId)
-      setDetail(r.data)
-      setDetailOpen(true)
-      setSelectedSkuId(r.data.skus[0]?.id ?? null)
-      setQuantity(1)
-      setLastResult({ title: '商品详情', ok: true, data: r.data })
-    } catch (e) {
-      setLastResult({ title: '商品详情', ok: false, data: e })
-      message.error('获取商品详情失败')
-    }
-  }
-
-  async function addCart() {
-    if (!selectedSkuId) return
-    try {
-      await orderService.addCartItem({ sku_id: selectedSkuId, quantity })
-      message.success('已加入购物车')
-    } catch {
-      message.error('加入购物车失败，请先登录')
-    }
-  }
-
-  const filtered = keyword
-    ? list.filter((p) => p.name.includes(keyword) || p.merchant_name.includes(keyword))
-    : list
+  useEffect(() => {
+    void loadProducts(categoryId, 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryId, minPriceYuan, maxPriceYuan, productSort])
 
   return (
-    <div className="shop-page">
-      <Card
-        title="商品浏览"
-        extra={
-          <Space>
-            <Input.Search
-              placeholder="按商品/店铺筛选"
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              style={{ width: 240 }}
-              onSearch={() => void load(1)}
-            />
-            <Button onClick={() => void load(page)}>刷新</Button>
-          </Space>
-        }
-      >
-        <List
-          grid={{ gutter: 16, xs: 1, sm: 2, md: 3, lg: 4, xl: 4, xxl: 5 }}
-          dataSource={filtered}
-          loading={loading}
-          renderItem={(product) => (
-            <List.Item>
-              <Card
-                hoverable
-                cover={
-                  <div style={{
-                    height: 132, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: 'linear-gradient(135deg, rgba(31,111,255,0.16), rgba(18,168,143,0.18))',
-                    color: '#426280', fontWeight: 900, fontSize: 16,
-                  }}>
-                    商品图
-                  </div>
-                }
-                onClick={() => void openProduct(product.id)}
-                actions={[<Button key="cart" type="primary" size="small" icon={<ShoppingCartOutlined />} onClick={(e) => { e.stopPropagation(); void openProduct(product.id) }}>选择</Button>]}
-              >
-                <Card.Meta
-                  title={product.name}
-                  description={
-                    <Space direction="vertical" size={4}>
-                      <Text type="secondary">{product.merchant_name}</Text>
-                      <Space><Tag color="blue">商品 #{product.id}</Tag><Tag color="blue">店铺 #{product.merchant_id}</Tag></Space>
-                      <Text strong style={{ color: '#d92d20', fontSize: 20 }}>￥{yuan(product.price_cent)}</Text>
-                      <Text type="secondary">销量 {product.sales_count}</Text>
-                    </Space>
-                  }
-                />
-              </Card>
-            </List.Item>
-          )}
-        />
-        <div style={{ textAlign: 'center', marginTop: 16 }}>
-          <Button onClick={() => void load(1)} disabled={loading}>刷新商品</Button>
+    <div className="product-page">
+      {/* ── Hero Banner ── */}
+      <div className="product-hero">
+        <div className="product-hero-bg" />
+        <div className="product-hero-inner">
+          <h1 className="product-hero-title">发现好物</h1>
+          <p className="product-hero-subtitle">品质生活，从这里开始</p>
+          <Input
+            size="large"
+            allowClear
+            placeholder="搜索你想要的商品…"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            onPressEnter={() => loadProducts(categoryId, 1)}
+            className="product-search-bar"
+            suffix={
+              <SearchOutlined
+                style={{ color: '#3598ff', fontSize: 18, cursor: 'pointer' }}
+                onClick={() => loadProducts(categoryId, 1)}
+              />
+            }
+          />
         </div>
-      </Card>
+      </div>
 
-      <Modal
-        title={detail?.name}
-        open={detailOpen}
-        onCancel={() => setDetailOpen(false)}
-        footer={null}
-        width={700}
-      >
-        {detail && (
-          <Space direction="vertical" style={{ width: '100%' }} size="middle">
-            <Paragraph>{detail.description || '暂无描述'}</Paragraph>
-            <Table
-              dataSource={detail.skus}
-              rowKey="id"
+      {/* ── Filter Bar ── */}
+      <div className="product-filter-bar">
+        {/* Category chips */}
+        <div className="filter-section">
+          <Text className="filter-section-label">分类</Text>
+          <div className="filter-chips">
+            <Button
+              shape="round"
+              type={categoryId === undefined ? 'primary' : 'default'}
               size="small"
-              pagination={false}
-              columns={[
-                { title: '选择', render: (_, sku) => <Radio checked={selectedSkuId === sku.id} onChange={() => setSelectedSkuId(sku.id)} /> },
-                { title: '规格', render: (_, sku) => <>{sku.name} <Tag color="blue">SKU #{sku.id}</Tag></> },
-                { title: '价格', render: (_, sku) => <Text strong style={{ color: '#d92d20' }}>￥{yuan(sku.price_cent)}</Text> },
-                { title: '库存', dataIndex: 'stock' },
+              onClick={() => setCategoryId(undefined)}
+              className="filter-chip"
+            >
+              全部
+            </Button>
+            {categoryTree.filter((cat) => cat.name !== '本地服务').slice(0, 24).map((cat) => (
+              <Button
+                key={cat.id}
+                shape="round"
+                type={categoryId === cat.id ? 'primary' : 'default'}
+                size="small"
+                onClick={() => setCategoryId(cat.id)}
+                className="filter-chip"
+              >
+                {cat.name}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {/* Price + Sort + Actions */}
+        <div className="filter-actions">
+          <div className="filter-group">
+            <Text className="filter-group-label">价格</Text>
+            <Space.Compact>
+              <InputNumber
+                min={0}
+                precision={2}
+                placeholder="最低"
+                value={minPriceYuan ?? undefined}
+                onChange={(v) => setMinPriceYuan(v === null ? null : Number(v))}
+                className="filter-price-input"
+              />
+              <span className="filter-price-sep">—</span>
+              <InputNumber
+                min={0}
+                precision={2}
+                placeholder="最高"
+                value={maxPriceYuan ?? undefined}
+                onChange={(v) => setMaxPriceYuan(v === null ? null : Number(v))}
+                className="filter-price-input"
+              />
+            </Space.Compact>
+          </div>
+
+          <div className="filter-group">
+            <Text className="filter-group-label">排序</Text>
+            <Select
+              value={productSort}
+              onChange={setProductSort}
+              className="filter-sort-select"
+              options={[
+                { value: 'newest:desc', label: '最新上架' },
+                { value: 'price:asc', label: '价格升序' },
+                { value: 'price:desc', label: '价格降序' },
               ]}
             />
-            <Space>
-              <Input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))} style={{ width: 80 }} />
-              <Button type="primary" icon={<ShoppingCartOutlined />} onClick={addCart}>加入购物车</Button>
-            </Space>
-          </Space>
-        )}
-      </Modal>
+          </div>
 
-      <DataPanel result={lastResult} />
+          <Button
+            type="primary"
+            icon={<ReloadOutlined />}
+            onClick={() => {
+              setKeyword('')
+              setCategoryId(undefined)
+              setMinPriceYuan(null)
+              setMaxPriceYuan(null)
+              setProductSort('newest:desc')
+            }}
+            className="btn-filter-apply"
+          >
+            重置
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Product Grid ── */}
+      <div className="product-section">
+        <Skeleton loading={loading} active paragraph={{ rows: 10 }}>
+          {products.length === 0 ? (
+            <Empty
+              description="暂无符合条件的商品"
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              style={{ padding: '80px 0' }}
+            />
+          ) : (
+            <>
+              <div className="product-grid">
+                {products.map((product) => (
+                  <Link
+                    to={`/products/${product.id}`}
+                    key={product.id}
+                    className="product-card-link"
+                  >
+                    <Card
+                      hoverable
+                      className="product-ec-card"
+                      cover={
+                        <div className="pec-cover">
+                          {product.cover_url ? (
+                            <Image
+                              preview={false}
+                              src={absoluteAssetUrl(product.cover_url)}
+                              alt={product.name}
+                              fallback="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Crect fill='%23f5f5f5' width='300' height='300'/%3E%3Ctext x='50%25' y='50%25' fill='%23ccc' text-anchor='middle' dy='.3em' font-size='14'%3E暂无图片%3C/text%3E%3C/svg%3E"
+                            />
+                          ) : (
+                            <div className="pec-cover-placeholder">
+                              <Text type="secondary">暂无图片</Text>
+                            </div>
+                          )}
+                        </div>
+                      }
+                    >
+                      <div className="pec-info">
+                        <div className="pec-tags">
+                          {product.tags.slice(0, 2).map((tag) => (
+                            <Tag key={tag} className="pec-tag-label">{tag}</Tag>
+                          ))}
+                        </div>
+                        <Text strong ellipsis className="pec-name" title={product.name}>
+                          {product.name}
+                        </Text>
+                        <Text type="secondary" ellipsis className="pec-merchant">
+                          {product.merchant_name}
+                        </Text>
+                        <div className="pec-price-row">
+                          <span className="pec-price">¥{yuan(product.price_cent)}</span>
+                          {product.market_price_cent ? (
+                            <span className="pec-market-price">¥{yuan(product.market_price_cent)}</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+
+              <div className="product-pagination">
+                <Pagination
+                  current={productPage}
+                  pageSize={productPageSize}
+                  total={productTotal}
+                  showSizeChanger
+                  showTotal={(total) => `共 ${total} 件商品`}
+                  onChange={(page, pageSize) => loadProducts(categoryId, page, pageSize)}
+                />
+              </div>
+            </>
+          )}
+        </Skeleton>
+      </div>
     </div>
   )
 }

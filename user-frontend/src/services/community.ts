@@ -9,6 +9,7 @@ export type Author = {
 export type CommunityPost = {
   id: number
   type: string
+  section: string
   title: string
   content: string
   image_urls: string[]
@@ -37,11 +38,35 @@ export type PageResult<T> = {
   total: number
 }
 
+export type CommunityUserProfile = {
+  user: Author
+  post_count: number
+  grass_post_count: number
+  comment_count: number
+  like_received_count: number
+  recent_posts: CommunityPost[]
+}
+
+export type CommunityTopic = {
+  name: string
+  post_count: number
+}
+
 export const communityService = {
-  listPosts(page = 1, pageSize = 12) {
-    return http.get<unknown, { data: PageResult<CommunityPost> }>('/community/posts', {
-      params: { page, page_size: pageSize },
-    })
+  listPosts(params?: { section?: string; author_id?: number; topic?: string; page?: number; page_size?: number }) {
+    return http.get<unknown, { data: PageResult<CommunityPost> }>('/community/posts', { params })
+  },
+
+  listTopics(params?: { limit?: number }) {
+    return http.get<unknown, { data: CommunityTopic[] }>('/community/topics', { params })
+  },
+
+  getUserProfile(userId: number) {
+    return http.get<unknown, { data: CommunityUserProfile }>(`/community/users/${userId}`)
+  },
+
+  listUserPosts(userId: number, params?: { section?: string; topic?: string; page?: number; page_size?: number }) {
+    return http.get<unknown, { data: PageResult<CommunityPost> }>(`/community/users/${userId}/posts`, { params })
   },
 
   createPost(payload: {
@@ -50,6 +75,7 @@ export const communityService = {
     content: string
     product_ids: number[]
     topic_tags: string[]
+    section?: string
     image_urls?: string[]
   }) {
     return http.post<unknown, { data: CommunityPost }>('/community/posts', payload)

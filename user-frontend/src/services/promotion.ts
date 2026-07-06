@@ -27,9 +27,21 @@ export type UserCoupon = {
   template: CouponTemplate
 }
 
+export type FullDiscount = {
+  id: number
+  name: string
+  scope_type: string
+  scope_ids: number[]
+  min_amount_cent: number
+  discount_amount_cent: number
+  status: string
+  valid_from?: string | null
+  valid_to?: string | null
+}
+
 export const promotionService = {
-  listCoupons() {
-    return http.get<unknown, { data: CouponTemplate[] }>('/promotions/coupons')
+  listCoupons(params?: { merchant_id?: number }) {
+    return http.get<unknown, { data: CouponTemplate[] }>('/promotions/coupons', { params })
   },
 
   claimCoupon(couponTemplateId: number) {
@@ -38,5 +50,9 @@ export const promotionService = {
 
   listMyCoupons(status?: string) {
     return http.get<unknown, { data: UserCoupon[] }>('/promotions/my-coupons', { params: { status } })
+  },
+
+  listFullDiscounts(params?: { merchant_id?: number }) {
+    return http.get<unknown, { data: FullDiscount[] }>('/promotions/full-discounts/active', { params })
   },
 }

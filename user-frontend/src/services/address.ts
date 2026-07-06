@@ -8,7 +8,10 @@ export type Address = {
   province: string
   city: string
   district?: string | null
+  street?: string | null
   detail_address: string
+  postal_code?: string | null
+  address_tag?: string | null
   is_default: boolean
 }
 
@@ -18,7 +21,10 @@ export type AddressPayload = {
   province: string
   city: string
   district?: string | null
+  street?: string | null
   detail_address: string
+  postal_code?: string | null
+  address_tag?: string | null
   is_default?: boolean
 }
 
