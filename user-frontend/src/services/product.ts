@@ -19,7 +19,9 @@ export type ProductDetail = {
   cover_url?: string | null
   category_id?: number | null
   status: string
+  sales_count: number
   images: string[]
+  detail_images: string[]
   merchant: { id: number; name: string }
   skus: Array<{ id: number; name: string; price_cent: number; market_price_cent?: number | null; stock: number }>
   review_summary: { count: number; average_score?: number | null }

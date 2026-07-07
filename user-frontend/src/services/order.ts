@@ -9,6 +9,7 @@ export type CartItem = {
   price_cent: number
   quantity: number
   checked: boolean
+  cover_url?: string | null
   source_post_id?: number | null
   source_label?: string | null
   invalid_reason?: string | null

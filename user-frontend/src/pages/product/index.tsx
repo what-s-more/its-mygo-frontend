@@ -24,7 +24,7 @@ import {
 } from '../../services/product'
 import { absoluteAssetUrl, yuan } from '../../utils/format'
 
-const { Text } = Typography
+const { Text, Title, Paragraph } = Typography
 
 type CategoryTreeItem = Category & {
   label: string
@@ -128,29 +128,30 @@ export function ProductPage() {
 
   return (
     <div className="product-page">
-      {/* ── Hero Banner ── */}
-      <div className="product-hero">
-        <div className="product-hero-bg" />
-        <div className="product-hero-inner">
-          <h1 className="product-hero-title">发现好物</h1>
-          <p className="product-hero-subtitle">品质生活，从这里开始</p>
-          <Input
-            size="large"
-            allowClear
-            placeholder="搜索你想要的商品…"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            onPressEnter={() => loadProducts(categoryId, 1)}
-            className="product-search-bar"
-            suffix={
-              <SearchOutlined
-                style={{ color: '#3598ff', fontSize: 18, cursor: 'pointer' }}
-                onClick={() => loadProducts(categoryId, 1)}
-              />
-            }
-          />
-        </div>
-      </div>
+      {/* ── Page Header ── */}
+      <header className="product-header">
+        <Title level={3} className="product-header-title">
+          发现好物
+        </Title>
+        <Paragraph className="product-header-sub">
+          品质生活，从这里开始
+        </Paragraph>
+        <Input
+          size="large"
+          allowClear
+          placeholder="搜索你想要的商品…"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          onPressEnter={() => loadProducts(categoryId, 1)}
+          className="product-search-bar"
+          suffix={
+            <SearchOutlined
+              style={{ color: '#3598ff', fontSize: 18, cursor: 'pointer' }}
+              onClick={() => loadProducts(categoryId, 1)}
+            />
+          }
+        />
+      </header>
 
       {/* ── Filter Bar ── */}
       <div className="product-filter-bar">

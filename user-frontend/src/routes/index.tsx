@@ -8,6 +8,7 @@ import { LoginPage } from '../pages/auth/login'
 import { RegisterPage } from '../pages/auth/register'
 import { CartPage } from '../pages/cart'
 import { CheckoutPage } from '../pages/checkout'
+import { CustomerServicePage } from '../pages/customer-service'
 import { CommunityPage } from '../pages/community'
 import { GroupBuyPage } from '../pages/group-buy'
 import { MerchantPage } from '../pages/merchant'
@@ -36,6 +37,7 @@ export function AppRoutes() {
       <Route path="/checkout" element={<RequireAuth><CheckoutPage /></RequireAuth>} />
       <Route path="/orders" element={<RequireAuth><OrderPage /></RequireAuth>} />
       <Route path="/community" element={<RequireAuth><CommunityPage /></RequireAuth>} />
+      <Route path="/customer-service" element={<RequireAuth><CustomerServicePage /></RequireAuth>} />
       <Route path="/promotions" element={<Navigate to="/user" replace />} />
       <Route path="/addresses" element={<Navigate to="/user" replace />} />
       <Route path="/user" element={<RequireAuth><UserCenterPage /></RequireAuth>} />

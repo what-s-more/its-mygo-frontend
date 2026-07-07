@@ -28,8 +28,11 @@ import {
   CloseCircleOutlined,
   StarOutlined,
   SafetyCertificateOutlined,
+  CustomerServiceOutlined,
 } from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
 import { orderService, type Order, type Payment, type Refund } from '../../services/order'
+import { customerService } from '../../services/customerService'
 import { uploadService } from '../../services/upload'
 import { getApiErrorMessage } from '../../services/http'
 import { yuan, statusText, statusColor, randomToken, pickErrorMessage } from '../../utils/format'
@@ -68,6 +71,7 @@ function imageListToFileList(urls: string[]): UploadFile[] {
 }
 
 export function OrderPage() {
+  const navigate = useNavigate()
   const [orders, setOrders] = useState<Order[]>([])
   const [selectedOrderId, setSelectedOrderId] = useState<number | undefined>()
   const [orderStatusFilter, setOrderStatusFilter] = useState<string | undefined>()
@@ -214,6 +218,15 @@ export function OrderPage() {
     }
   }
 
+  async function contactCustomerService(order: Order) {
+    try {
+      await customerService.createConversation({ target_type: 'platform', order_id: order.id })
+      navigate('/customer-service')
+    } catch (error) {
+      message.error(`创建客服会话失败：${getApiErrorMessage(error)}`)
+    }
+  }
+
   async function reviewSelectedOrder() {
     if (!selectedOrder || !selectedReviewOrderItem) return
     if (!reviewContent.trim()) {
@@ -307,10 +320,14 @@ export function OrderPage() {
     <div className="order-page">
       <Spin spinning={loading}>
         {/* ── Page Header ── */}
-        <div className="order-header">
-          <h1 className="order-header-title">我的订单</h1>
-          <p className="order-header-sub">查看订单、完成支付、确认收货、评价商品和发起售后</p>
-        </div>
+        <header className="order-header">
+          <Title level={3} className="order-header-title">
+            我的订单
+          </Title>
+          <Paragraph className="order-header-sub">
+            查看订单、完成支付、确认收货、评价商品和发起售后
+          </Paragraph>
+        </header>
 
         {/* ── Status Tabs ── */}
         <div className="order-tabs">
@@ -411,6 +428,13 @@ export function OrderPage() {
                           取消订单
                         </Button>
                       )}
+                      <Button
+                        size="small"
+                        icon={<CustomerServiceOutlined />}
+                        onClick={() => void contactCustomerService(order)}
+                      >
+                        联系客服
+                      </Button>
                     </div>
                   </div>
                 </div>

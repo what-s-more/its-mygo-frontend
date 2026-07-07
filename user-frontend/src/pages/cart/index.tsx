@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button, Checkbox, Empty, InputNumber, Spin, Tag, Typography, message } from 'antd'
+import { Button, Checkbox, Empty, Image, InputNumber, Spin, Tag, Typography, message } from 'antd'
 import { DeleteOutlined, ReloadOutlined, ShoppingCartOutlined } from '@ant-design/icons'
 
 import { authService } from '../../services/auth'
 import { orderService, type CartItem } from '../../services/order'
-import { pickErrorMessage, yuan } from '../../utils/format'
+import { absoluteAssetUrl, pickErrorMessage, yuan } from '../../utils/format'
 
 const { Text, Title, Paragraph } = Typography
 
@@ -174,7 +174,15 @@ export function CartPage() {
                   disabled={Boolean(item.invalid_reason)}
                   onChange={(event) => void toggleCartChecked(item, event.target.checked)}
                 />
-                <div className="cart-item-info">
+                <div className="cart-item-image-wrapper">
+                  <Image
+                    src={absoluteAssetUrl(item.cover_url)}
+                    alt={item.product_name}
+                    fallback="/src/assets/placeholder-product.png"
+                    className="cart-item-image"
+                  />
+                </div>
+                <div className="cart-item-info" onClick={() => navigate(`/products/${item.product_id}`)}>
                   <div className="cart-item-name">{item.product_name}</div>
                   <div className="cart-item-meta">
                     <Tag>{item.sku_name}</Tag>

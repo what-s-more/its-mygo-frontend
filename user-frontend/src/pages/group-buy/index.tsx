@@ -18,7 +18,7 @@ import { getApiErrorMessage } from '../../services/http'
 import { groupBuyService, type GroupBuyActivity } from '../../services/groupBuy'
 import { absoluteAssetUrl, statusColor, statusText, yuan } from '../../utils/format'
 
-const { Text } = Typography
+const { Text, Title, Paragraph } = Typography
 
 export function GroupBuyPage() {
   const navigate = useNavigate()
@@ -47,15 +47,15 @@ export function GroupBuyPage() {
     <div className="gb-page">
       {contextHolder}
       <Spin spinning={loading}>
-        {/* ── Hero Banner ── */}
-        <div className="gb-hero">
-          <div className="gb-hero-bg" />
-          <div className="gb-hero-inner">
-            <div className="gb-hero-badge"><FireOutlined /> 拼团专区</div>
-            <h1 className="gb-hero-title">拼着买，更划算</h1>
-            <p className="gb-hero-subtitle">邀请好友一起拼，专享超低拼团价</p>
-          </div>
-        </div>
+        {/* ── Page Header ── */}
+        <header className="gb-header">
+          <Title level={3} className="gb-header-title">
+            <FireOutlined /> 拼团专区
+          </Title>
+          <Paragraph className="gb-header-sub">
+            邀请好友一起拼，专享超低拼团价
+          </Paragraph>
+        </header>
 
         {/* ── Notice ── */}
         <div className="gb-notice">

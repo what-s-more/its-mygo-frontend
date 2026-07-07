@@ -20,10 +20,12 @@ import {
   ShoppingCartOutlined,
   ArrowLeftOutlined,
   FireOutlined,
+  CustomerServiceOutlined,
 } from '@ant-design/icons'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { authService } from '../../services/auth'
+import { customerService } from '../../services/customerService'
 import { getApiErrorMessage } from '../../services/http'
 import { groupBuyService, type GroupBuyActivity } from '../../services/groupBuy'
 import { orderService } from '../../services/order'
@@ -162,6 +164,24 @@ export function ProductDetailPage() {
     }
   }
 
+  async function contactMerchant() {
+    if (!product) return
+    if (!authService.hasToken()) {
+      message.warning('请先登录用户账号')
+      return
+    }
+    try {
+      await customerService.createConversation({
+        target_type: 'merchant',
+        merchant_id: product.merchant.id,
+        product_id: product.id,
+      })
+      navigate('/customer-service')
+    } catch (error) {
+      message.error(`创建客服会话失败：${getApiErrorMessage(error)}`)
+    }
+  }
+
   useEffect(() => {
     if (Number.isFinite(productId)) {
       setProduct(null)
@@ -280,6 +300,7 @@ export function ProductDetailPage() {
                     <Rate disabled value={product.review_summary.average_score ?? 0} allowHalf className="detail-rate-sm" />
                     <span className="detail-review-score">{product.review_summary.average_score ?? '-'}</span>
                     <span className="detail-review-count">{product.review_summary.count} 条评价</span>
+                    <Text style={{ color: '#999', fontSize: 13 }}>已售 {product.sales_count} 件</Text>
                     <span className="detail-fav-count">
                       {favoriteStatus?.favorited ? <HeartFilled style={{ color: '#f5222d' }} /> : <HeartOutlined />}
                       {' '}{favoriteStatus?.favorite_count ?? 0} 收藏
@@ -356,6 +377,14 @@ export function ProductDetailPage() {
                   >
                     {favoriteStatus?.favorited ? '已收藏' : '收藏'}
                   </Button>
+                  <Button
+                    size="large"
+                    icon={<CustomerServiceOutlined />}
+                    onClick={contactMerchant}
+                    className="btn-contact-merchant"
+                  >
+                    联系商家
+                  </Button>
                 </div>
               </div>
             </div>
@@ -382,6 +411,25 @@ export function ProductDetailPage() {
                   </div>
                 )}
               </Card>
+
+              {/* Detail Images */}
+              {product.detail_images && product.detail_images.length > 0 && (
+                <Card
+                  className="detail-tab-card"
+                  title={<span className="detail-tab-title">商品详情</span>}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {product.detail_images.map((url, index) => (
+                      <img
+                        key={`${url}-detail-${index}`}
+                        src={absoluteAssetUrl(url)}
+                        alt={`商品详情图 ${index + 1}`}
+                        style={{ width: '100%', borderRadius: 10, display: 'block' }}
+                      />
+                    ))}
+                  </div>
+                </Card>
+              )}
 
               {/* Reviews Tab */}
               <Card

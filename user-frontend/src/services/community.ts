@@ -8,6 +8,7 @@ export type Author = {
 
 export type CommunityPost = {
   id: number
+  merchant_id?: number | null
   type: string
   section: string
   title: string
@@ -18,6 +19,8 @@ export type CommunityPost = {
   status: string
   author: Author
   like_count: number
+  favorite_count: number
+  favorited: boolean
   comment_count: number
   created_at: string
 }
@@ -52,6 +55,11 @@ export type CommunityTopic = {
   post_count: number
 }
 
+export type CommunityFavoritePostItem = {
+  post: CommunityPost
+  favorited_at: string
+}
+
 export const communityService = {
   listPosts(params?: { section?: string; author_id?: number; topic?: string; page?: number; page_size?: number }) {
     return http.get<unknown, { data: PageResult<CommunityPost> }>('/community/posts', { params })
@@ -81,8 +89,20 @@ export const communityService = {
     return http.post<unknown, { data: CommunityPost }>('/community/posts', payload)
   },
 
+  deletePost(postId: number) {
+    return http.delete<unknown, { data: null }>(`/community/posts/${postId}`)
+  },
+
   likePost(postId: number) {
     return http.post<unknown, { data: { liked: boolean; like_count: number } }>(`/community/posts/${postId}/like`)
+  },
+
+  favoritePost(postId: number) {
+    return http.post<unknown, { data: { favorited: boolean; favorite_count: number } }>(`/community/posts/${postId}/favorite`)
+  },
+
+  listFavoritePosts(params?: { page?: number; page_size?: number }) {
+    return http.get<unknown, { data: PageResult<CommunityFavoritePostItem> }>('/community/favorite-posts', { params })
   },
 
   listComments(postId: number) {

@@ -22,7 +22,7 @@ import {
 import { promotionService, type CouponTemplate } from '../../services/promotion'
 import { absoluteAssetUrl, pickErrorMessage, yuan } from '../../utils/format'
 
-const { Text, Paragraph } = Typography
+const { Text, Paragraph, Title } = Typography
 
 export function MerchantPage() {
   const { merchantId } = useParams()
@@ -157,6 +157,16 @@ export function MerchantPage() {
 
   return (
     <div className="shop-page">
+      {/* ── Page Header ── */}
+      <header className="shop-header">
+        <Title level={3} className="shop-header-title">
+          <ShopOutlined /> 店铺主页
+        </Title>
+        <Paragraph className="shop-header-sub">
+          浏览店铺商品、关注店铺、参与店铺活动
+        </Paragraph>
+      </header>
+
       {/* ── Shop Hero Banner ── */}
       <div className="shop-hero">
         <div className="shop-hero-bg" />
