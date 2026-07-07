@@ -186,13 +186,12 @@ export function CartPage() {
                   <div className="cart-item-name">{item.product_name}</div>
                   <div className="cart-item-meta">
                     <Tag>{item.sku_name}</Tag>
-                    <Tag className="cart-item-sku-id">SKU #{item.sku_id}</Tag>
                   </div>
                   {(item.source_label || item.source_post_id) && (
                     <div className="cart-item-source">
                       {item.source_label ? <Tag color="purple">{item.source_label}</Tag> : null}
                       {item.source_post_id ? (
-                        <Tag color="purple">种草来源 #{item.source_post_id}</Tag>
+                        <Tag color="purple">种草来源</Tag>
                       ) : null}
                     </div>
                   )}

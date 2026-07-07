@@ -350,7 +350,6 @@ export function CheckoutPage() {
             >
               <div className="checkout-address-row">
                 <div className="checkout-address-tags">
-                  <Tag className="checkout-tag-id">地址 #{address.id}</Tag>
                   {address.is_default ? <Tag color="green">默认</Tag> : null}
                   {address.address_tag ? <Tag>{address.address_tag}</Tag> : null}
                 </div>
@@ -425,21 +424,17 @@ export function CheckoutPage() {
                 {/* Activity info */}
                 <Card className="checkout-card" title={<span className="checkout-card-title">拼团活动</span>}>
                   <div className="checkout-gb-tags">
-                    <Tag className="gb-tag-id">拼团 #{activity.id}</Tag>
                     <Tag className="gb-tag-group-size">
                       <TeamOutlined /> {activity.group_size} 人团
                     </Tag>
                     <Tag color={statusColor(activity.status)}>{statusText(activity.status)}</Tag>
                     {group ? (
                       <Tag className="gb-tag-group-id">
-                        团 #{group.id} {group.joined_count}/{group.group_size} 人
+                        {group.joined_count}/{group.group_size} 人
                       </Tag>
                     ) : null}
                   </div>
                   <div className="checkout-gb-name">{activity.name}</div>
-                  <div className="checkout-gb-meta">
-                    商品 #{activity.product_id} · SKU #{activity.sku_id}
-                  </div>
                   {activity.valid_to && (
                     <div className="checkout-gb-deadline">
                       活动截止：{new Date(activity.valid_to).toLocaleString()}
@@ -567,7 +562,6 @@ export function CheckoutPage() {
                         <div className="checkout-item-info">
                           <div className="checkout-item-name">{item.product_name}</div>
                           <div className="checkout-item-meta">
-                            <Tag className="checkout-tag-sku">SKU #{item.sku_id}</Tag>
                             <Tag>{item.sku_name}</Tag>
                           </div>
                           {(item.source_label || item.source_post_id) && (
@@ -576,7 +570,7 @@ export function CheckoutPage() {
                                 <Tag color="purple">{item.source_label}</Tag>
                               ) : null}
                               {item.source_post_id ? (
-                                <Tag color="purple">种草来源 #{item.source_post_id}</Tag>
+                                <Tag color="purple">种草来源</Tag>
                               ) : null}
                             </div>
                           )}

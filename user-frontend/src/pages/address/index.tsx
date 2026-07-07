@@ -251,7 +251,6 @@ export function AddressPage() {
                           <HomeOutlined /> {address.address_tag}
                         </Tag>
                       )}
-                      <Tag className="addr-tag-id">#{address.id}</Tag>
                     </div>
                   </div>
 

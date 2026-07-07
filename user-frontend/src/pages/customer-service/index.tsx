@@ -8,6 +8,7 @@ import {
   Input,
   List,
   message,
+  Popconfirm,
   Space,
   Spin,
   Tag,
@@ -16,6 +17,7 @@ import {
 import {
   ArrowLeftOutlined,
   CustomerServiceOutlined,
+  DeleteOutlined,
   SendOutlined,
   ShopOutlined,
 } from '@ant-design/icons'
@@ -196,6 +198,20 @@ export function CustomerServicePage() {
     }
   }
 
+  async function deleteConversation(conversationId: number) {
+    try {
+      await customerService.deleteConversation(conversationId)
+      message.success('会话已删除')
+      if (selectedConversation?.id === conversationId) {
+        setSelectedConversation(null)
+        setMessages([])
+      }
+      await loadConversations()
+    } catch (error) {
+      message.error(`删除会话失败：${getApiErrorMessage(error)}`)
+    }
+  }
+
   function renderMessage(msg: CustomerServiceMessage) {
     const isSelf = msg.sender_type === 'user'
     return (
@@ -261,9 +277,31 @@ export function CustomerServicePage() {
                           )}
                           <Text strong className="cs-conversation-name">{targetLabel(conv)}</Text>
                         </Space>
-                        {conv.unread_count > 0 && (
-                          <Badge count={conv.unread_count} size="small" />
-                        )}
+                        <Space size={4} className="cs-conversation-actions">
+                          {conv.unread_count > 0 && (
+                            <Badge count={conv.unread_count} size="small" />
+                          )}
+                          <Popconfirm
+                            title="删除该会话？"
+                            description="会话及所有消息将被永久删除"
+                            okText="删除"
+                            cancelText="取消"
+                            okButtonProps={{ danger: true }}
+                            onConfirm={(e) => {
+                              e?.stopPropagation()
+                              void deleteConversation(conv.id)
+                            }}
+                            onCancel={(e) => e?.stopPropagation()}
+                          >
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<DeleteOutlined />}
+                              className="cs-conversation-delete"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </Popconfirm>
+                        </Space>
                       </div>
                       {conv.last_message && (
                         <Text className="cs-conversation-last" ellipsis>

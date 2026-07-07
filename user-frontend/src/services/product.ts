@@ -18,6 +18,7 @@ export type ProductDetail = {
   description: string
   cover_url?: string | null
   category_id?: number | null
+  category_name?: string | null
   status: string
   sales_count: number
   images: string[]

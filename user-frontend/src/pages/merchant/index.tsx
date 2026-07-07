@@ -1,22 +1,19 @@
-import { Button, Card, Drawer, Empty, Image, InputNumber, Select, Skeleton, Space, Tag, Typography, message } from 'antd'
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Button, Empty, InputNumber, Select, Skeleton, Tag, Typography, message } from 'antd'
+import { useEffect, useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import {
   ShopOutlined,
   HeartOutlined,
   HeartFilled,
   GiftOutlined,
   ReloadOutlined,
-  ShoppingCartOutlined,
   EnvironmentOutlined,
 } from '@ant-design/icons'
 
-import { orderService } from '../../services/order'
 import {
   productService,
   type Merchant,
   type MerchantFollowStatus,
-  type ProductDetail,
   type ProductListItem,
 } from '../../services/product'
 import { promotionService, type CouponTemplate } from '../../services/promotion'
@@ -26,6 +23,7 @@ const { Text, Paragraph, Title } = Typography
 
 export function MerchantPage() {
   const { merchantId } = useParams()
+  const navigate = useNavigate()
   const numericMerchantId = Number(merchantId)
   const [merchant, setMerchant] = useState<Merchant | null>(null)
   const [products, setProducts] = useState<ProductListItem[]>([])
@@ -34,24 +32,8 @@ export function MerchantPage() {
   const [minPriceYuan, setMinPriceYuan] = useState<number | null>(null)
   const [maxPriceYuan, setMaxPriceYuan] = useState<number | null>(null)
   const [sort, setSort] = useState('newest:desc')
-  const [selectedProduct, setSelectedProduct] = useState<ProductDetail | null>(null)
-  const [selectedSkuId, setSelectedSkuId] = useState<number>()
-  const [quantity, setQuantity] = useState(1)
   const [coupons, setCoupons] = useState<CouponTemplate[]>([])
   const [followStatus, setFollowStatus] = useState<MerchantFollowStatus | null>(null)
-
-  const selectedSku = useMemo(() => {
-    return selectedProduct?.skus.find((sku) => sku.id === selectedSkuId) ?? selectedProduct?.skus[0]
-  }, [selectedProduct, selectedSkuId])
-
-  const selectedProductImages = useMemo(() => {
-    if (!selectedProduct) return []
-    const urls = [...selectedProduct.images]
-    if (selectedProduct.cover_url && !urls.includes(selectedProduct.cover_url)) {
-      urls.unshift(selectedProduct.cover_url)
-    }
-    return urls
-  }, [selectedProduct])
 
   async function loadMerchant() {
     if (!Number.isFinite(numericMerchantId) || numericMerchantId <= 0) return
@@ -76,8 +58,8 @@ export function MerchantPage() {
   async function loadCoupons() {
     if (!Number.isFinite(numericMerchantId) || numericMerchantId <= 0) return
     try {
-      const response = await promotionService.listCoupons({ merchant_id: numericMerchantId })
-      setCoupons(response.data)
+      const couponResponse = await promotionService.listCoupons({ merchant_id: numericMerchantId })
+      setCoupons(couponResponse.data)
     } catch (error) {
       message.error(pickErrorMessage(error) ?? '店铺优惠券加载失败')
     }
@@ -114,30 +96,6 @@ export function MerchantPage() {
       sort_order: sortOrder,
       page: 1,
       page_size: 24,
-    }
-  }
-
-  async function openProduct(productId: number) {
-    try {
-      const response = await productService.getProduct(productId)
-      setSelectedProduct(response.data)
-      setSelectedSkuId(response.data.skus[0]?.id)
-      setQuantity(1)
-    } catch (error) {
-      message.error(pickErrorMessage(error) ?? '商品详情加载失败')
-    }
-  }
-
-  async function addCart() {
-    if (!selectedSku) {
-      message.warning('请先选择 SKU')
-      return
-    }
-    try {
-      await orderService.addCartItem({ sku_id: selectedSku.id, quantity })
-      message.success('已加入购物车')
-    } catch (error) {
-      message.error(pickErrorMessage(error) ?? '加入购物车失败，请确认已登录用户账号')
     }
   }
 
@@ -183,7 +141,6 @@ export function MerchantPage() {
               <div className="shop-hero-info">
                 <h1 className="shop-name">{merchant?.name ?? `店铺 #${numericMerchantId}`}</h1>
                 <div className="shop-hero-meta">
-                  <Tag className="shop-tag-id">店铺 #{numericMerchantId}</Tag>
                   <Tag className="shop-tag-stat">在售 {total}</Tag>
                   <Tag className="shop-tag-follow">
                     <HeartOutlined /> {followStatus?.follower_count ?? 0}
@@ -204,9 +161,6 @@ export function MerchantPage() {
               >
                 {followStatus?.followed ? '已关注' : '关注店铺'}
               </Button>
-              <Link to="/">
-                <Button className="shop-btn-back">返回首页</Button>
-              </Link>
             </div>
           </Skeleton>
         </div>
@@ -225,6 +179,7 @@ export function MerchantPage() {
           <div className="shop-coupon-list">
             {coupons.map((coupon) => {
               const soldOut = coupon.total_quantity !== 0 && coupon.claimed_quantity >= coupon.total_quantity
+              const claimed = coupon.received
               return (
                 <div key={coupon.id} className={`shop-coupon-card ${soldOut ? 'shop-coupon-soldout' : ''}`}>
                   <div className="shop-coupon-left">
@@ -243,11 +198,11 @@ export function MerchantPage() {
                   <Button
                     size="small"
                     type="primary"
-                    disabled={soldOut}
+                    disabled={soldOut || claimed}
                     onClick={() => void claimCoupon(coupon.id)}
                     className="btn-shop-primary"
                   >
-                    {soldOut ? '已领完' : '领取'}
+                    {soldOut ? '已领完' : claimed ? '已领取' : '领取'}
                   </Button>
                 </div>
               )
@@ -309,7 +264,7 @@ export function MerchantPage() {
           ) : (
             <div className="shop-product-grid">
               {products.map((product) => (
-                <div key={product.id} className="shop-product-card" onClick={() => void openProduct(product.id)}>
+                <div key={product.id} className="shop-product-card" onClick={() => navigate(`/products/${product.id}`)}>
                   <div className="shop-product-img">
                     {product.cover_url ? (
                       <img src={absoluteAssetUrl(product.cover_url)} alt={product.name} loading="lazy" />
@@ -319,9 +274,6 @@ export function MerchantPage() {
                   </div>
                   <div className="shop-product-body">
                     <Text className="shop-product-name" ellipsis>{product.name}</Text>
-                    <div className="shop-product-meta">
-                      <Tag className="shop-product-tag-id">#{product.id}</Tag>
-                    </div>
                     <div className="shop-product-price-row">
                       <span className="shop-product-price">¥{yuan(product.price_cent)}</span>
                       {product.market_price_cent ? (
@@ -335,116 +287,6 @@ export function MerchantPage() {
           )}
         </Skeleton>
       </div>
-
-      {/* ── Product Detail Drawer ── */}
-      <Drawer
-        title="商品详情"
-        width={980}
-        open={!!selectedProduct}
-        onClose={() => setSelectedProduct(null)}
-        destroyOnClose
-        className="shop-drawer"
-      >
-        {selectedProduct ? (
-          <div className="shop-detail">
-            {/* Tags row */}
-            <div className="shop-detail-tags">
-              <Tag className="shop-tag-id">商品 #{selectedProduct.id}</Tag>
-              <Tag className="shop-tag-stat">店铺 #{selectedProduct.merchant.id}</Tag>
-              {selectedProduct.category_id && <Tag className="shop-tag-stat">分类 #{selectedProduct.category_id}</Tag>}
-              <Tag className="shop-tag-review">
-                {selectedProduct.review_summary.average_score ?? '-'} 分 / {selectedProduct.review_summary.count} 评
-              </Tag>
-            </div>
-
-            <div className="shop-detail-layout">
-              {/* Left: Images */}
-              <div className="shop-detail-left">
-                {selectedProductImages[0] ? (
-                  <Image className="shop-detail-main-img" src={absoluteAssetUrl(selectedProductImages[0])} />
-                ) : (
-                  <div className="shop-product-noimg shop-detail-main-img">暂无图片</div>
-                )}
-                {selectedProductImages.length > 1 && (
-                  <div className="shop-detail-gallery">
-                    {selectedProductImages.slice(1).map((url, index) => (
-                      <Image
-                        key={`${url}-${index}`}
-                        width={80}
-                        height={80}
-                        src={absoluteAssetUrl(url)}
-                        className="shop-detail-thumb"
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Right: Info */}
-              <div className="shop-detail-right">
-                <h2 className="shop-detail-name">{selectedProduct.name}</h2>
-                <div className="shop-detail-price-box">
-                  <span className="shop-detail-price">¥{yuan(selectedSku?.price_cent)}</span>
-                  {selectedSku?.market_price_cent && (
-                    <span className="shop-detail-market">¥{yuan(selectedSku.market_price_cent)}</span>
-                  )}
-                </div>
-
-                {/* SKU Selection */}
-                <div className="shop-detail-sku-section">
-                  <Text type="secondary" className="shop-detail-section-label">规格选择</Text>
-                  <div className="shop-detail-sku-grid">
-                    {selectedProduct.skus.map((sku) => (
-                      <button
-                        key={sku.id}
-                        className={`shop-sku-btn ${selectedSkuId === sku.id ? 'shop-sku-btn-active' : ''}`}
-                        onClick={() => setSelectedSkuId(sku.id)}
-                      >
-                        <span className="shop-sku-name">{sku.name}</span>
-                        <span className="shop-sku-info">SKU #{sku.id} · 库存 {sku.stock}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Quantity + Actions */}
-                <div className="shop-detail-actions">
-                  <div className="shop-detail-qty">
-                    <Text type="secondary" className="shop-detail-section-label">数量</Text>
-                    <InputNumber min={1} value={quantity} onChange={(value) => setQuantity(Number(value) || 1)} />
-                  </div>
-                  <div className="shop-detail-btns">
-                    <Button
-                      type="primary"
-                      size="large"
-                      icon={<ShoppingCartOutlined />}
-                      onClick={() => void addCart()}
-                      className="btn-shop-primary"
-                    >
-                      加入购物车
-                    </Button>
-                    <Link to="/cart">
-                      <Button size="large">去购物车</Button>
-                    </Link>
-                  </div>
-                </div>
-
-                {/* Description */}
-                <Card size="small" title="图文详情" className="shop-detail-desc-card">
-                  <Paragraph style={{ whiteSpace: 'pre-line' }}>{selectedProduct.description || '暂无描述'}</Paragraph>
-                  {selectedProductImages.length > 0 && (
-                    <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                      {selectedProductImages.map((url, index) => (
-                        <Image key={`${url}-content-${index}`} src={absoluteAssetUrl(url)} width="100%" />
-                      ))}
-                    </Space>
-                  )}
-                </Card>
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </Drawer>
     </div>
   )
 }

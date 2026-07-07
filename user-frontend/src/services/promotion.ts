@@ -14,6 +14,7 @@ export type CouponTemplate = {
   status: string
   valid_from?: string | null
   valid_to?: string | null
+  received: boolean
 }
 
 export type UserCoupon = {

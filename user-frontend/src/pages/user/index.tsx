@@ -313,8 +313,17 @@ export function UserCenterPage() {
   async function uploadAvatar(file: File) {
     try {
       const response = await uploadService.uploadImage(file)
-      setProfileAvatarUrl(response.data.url)
-      message.success('头像已上传，请保存个人资料')
+      const newAvatarUrl = response.data.url
+      setProfileAvatarUrl(newAvatarUrl)
+      const updateResponse = await authService.updateProfile({
+        nickname: profileNickname,
+        gender: profileGender || null,
+        birthday: profileBirthday || null,
+        email: profileEmail || null,
+        avatar_url: newAvatarUrl || null,
+      })
+      setProfile(updateResponse.data)
+      message.success('头像已更新')
     } catch (error) {
       message.error(`上传头像失败：${getApiErrorMessage(error)}`)
     }
@@ -502,6 +511,8 @@ export function UserCenterPage() {
             <div className="uc-hero-info">
               <div className="uc-hero-name-row">
                 <h1 className="uc-hero-name">{profile?.nickname ?? '用户'}</h1>
+                {profile?.gender === 'male' && <span className="uc-gender-icon uc-gender-male">♂</span>}
+                {profile?.gender === 'female' && <span className="uc-gender-icon uc-gender-female">♀</span>}
                 <Button
                   type="primary"
                   size="small"
@@ -513,7 +524,6 @@ export function UserCenterPage() {
                 </Button>
               </div>
               <div className="uc-hero-meta">
-                <Tag className="uc-tag-user-id">用户 #{profile?.id ?? '-'}</Tag>
                 {memberLevel && (
                   <Tag className="uc-tag-level">
                     <CrownOutlined /> {memberLevel.level_name}
@@ -744,7 +754,6 @@ export function UserCenterPage() {
                             <Text className="uc-coupon-mine-name" ellipsis>{coupon.template.name}</Text>
                             <Tag className="uc-coupon-scope-tag">{scopeText(coupon.template.scope_type, coupon.template.scope_ids)}</Tag>
                             <div className="uc-coupon-mine-meta">
-                              <span>#{coupon.id}</span>
                               <span>领取 {coupon.claimed_at.slice(0, 10)}</span>
                               {coupon.used_at && <span>使用 {coupon.used_at.slice(0, 10)}</span>}
                             </div>
@@ -826,7 +835,6 @@ export function UserCenterPage() {
                                 <HomeOutlined /> {address.address_tag}
                               </Tag>
                             )}
-                            <Tag className="uc-addr-tag-id">#{address.id}</Tag>
                           </div>
                         </div>
                         <div className="uc-addr-card-content">

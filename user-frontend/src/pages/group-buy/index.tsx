@@ -98,16 +98,17 @@ export function GroupBuyPage() {
                       </div>
                       <div className="gb-ac-info">
                         <div className="gb-ac-tags">
-                          <Tag className="gb-tag-id">拼团 #{activity.id}</Tag>
                           <Tag className="gb-tag-group-size"><TeamOutlined /> {activity.group_size} 人团</Tag>
                           <Tag color={statusColor(activity.status)}>{statusText(activity.status)}</Tag>
                         </div>
                         <Text strong ellipsis className="gb-ac-name" title={activity.name}>
                           {activity.name}
                         </Text>
-                        <Text type="secondary" className="gb-ac-sku">
-                          商品 #{activity.product_id} · SKU #{activity.sku_id}
-                        </Text>
+                        {activity.product?.name ? (
+                          <Text type="secondary" ellipsis className="gb-ac-product-name">
+                            {activity.product.name}
+                          </Text>
+                        ) : null}
                       </div>
                     </div>
 
@@ -151,7 +152,7 @@ export function GroupBuyPage() {
                             <List.Item className="gb-group-item">
                               <div className="gb-group-row">
                                 <div className="gb-group-left">
-                                  <Tag className="gb-tag-group-id">团 #{group.id}</Tag>
+                                  <Tag className="gb-tag-group-id">已加入</Tag>
                                   <span className="gb-group-count">
                                     {group.joined_count}/{group.group_size} 人
                                   </span>

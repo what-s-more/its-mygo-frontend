@@ -244,7 +244,15 @@ export function CommunityPage() {
     const data = await run<CommunityComment>('发表评论', () => communityService.createComment(postId, commentContent))
     if (data && selectedPost) {
       message.success('评论已发表')
-      await openPost(selectedPost)
+      const newCount = selectedPost.comment_count + 1
+      setSelectedPost({ ...selectedPost, comment_count: newCount })
+      setPosts((current) =>
+        current.map((post) =>
+          post.id === postId ? { ...post, comment_count: post.comment_count + 1 } : post,
+        ),
+      )
+      const commentsData = await run<{ list?: CommunityComment[] }>('帖子评论', () => communityService.listComments(postId))
+      setComments(commentsData?.list ?? [])
     }
   }
 

@@ -93,6 +93,8 @@ export function OrderPage() {
   const [refundReason, setRefundReason] = useState('')
   const [selectedReviewOrderItemId, setSelectedReviewOrderItemId] = useState<number | undefined>()
   const [selectedRefundOrderItemId, setSelectedRefundOrderItemId] = useState<number | undefined>()
+  const [reviewModalOpen, setReviewModalOpen] = useState(false)
+  const [refundModalOpen, setRefundModalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const selectedOrder = useMemo(() => orders.find((order) => order.id === selectedOrderId) ?? null, [orders, selectedOrderId])
@@ -247,6 +249,7 @@ export function OrderPage() {
         message.success('评价已发布')
         setReviewContent('')
         setReviewImages([])
+        setReviewModalOpen(false)
       }
     } finally {
       setLoading(false)
@@ -274,6 +277,7 @@ export function OrderPage() {
         message.success('售后申请已提交')
         setRefundImages([])
         setRefundReason('')
+        setRefundModalOpen(false)
         await loadOrders()
         await loadRefunds()
       }
@@ -364,11 +368,10 @@ export function OrderPage() {
                   {/* Card Header */}
                   <div className="oc-header">
                     <div className="oc-header-left">
-                      <Tag className="oc-tag-id">订单 #{order.id}</Tag>
                       <Text type="secondary" className="oc-order-no">{order.order_no}</Text>
-                      {order.order_type ? <Tag className="oc-tag-type">{statusText(order.order_type)}</Tag> : null}
+                      {order.order_type === 'grass' ? <Tag color="purple" className="oc-tag-type">{statusText(order.order_type)}</Tag> : order.order_type === 'group_buy' ? <Tag className="oc-tag-type">{statusText(order.order_type)}</Tag> : null}
                       {order.source_post_id && (
-                        <Tag color="purple">种草来源 #{order.source_post_id}</Tag>
+                        <Tag color="purple">种草来源</Tag>
                       )}
                     </div>
                     <div className="oc-header-right">
@@ -531,122 +534,152 @@ export function OrderPage() {
               </Card>
             )}
 
-            {/* Review Section */}
-            {selectedOrder.status === 'completed' && (
-              <Card className="od-card" title={<span className="od-card-title"><StarOutlined /> 评价商品</span>}>
-                <div className="od-form">
-                  <div className="od-form-row">
-                    <Text type="secondary" className="od-form-label">评价商品</Text>
-                    <Select
-                      style={{ width: 320 }}
-                      value={reviewItemValue}
-                      onChange={(value) => setSelectedReviewOrderItemId(value as number)}
-                      options={selectedOrder.items.map((item) => ({
-                        value: item.id,
-                        label: `#${item.id} ${item.product_name} x${item.quantity}`,
-                      }))}
-                    />
-                  </div>
-                  <div className="od-form-row">
-                    <Text type="secondary" className="od-form-label">评分</Text>
-                    <Rate value={reviewScore} onChange={setReviewScore} />
-                  </div>
-                  <Input.TextArea
-                    rows={3}
-                    value={reviewContent}
-                    onChange={(event) => setReviewContent(event.target.value)}
-                    placeholder="说说商品体验…"
-                    className="od-textarea"
-                  />
-                  <Upload
-                    listType="picture-card"
-                    beforeUpload={(file) => {
-                      void uploadReviewImage(file)
-                      return false
-                    }}
-                    fileList={imageListToFileList(reviewImages)}
-                    onRemove={(file) => {
-                      const index = Number(String(file.uid).replace('img-', ''))
-                      if (Number.isFinite(index)) {
-                        setReviewImages((items) => items.filter((_, idx) => idx !== index))
-                      }
-                      return true
-                    }}
-                  >
-                    {reviewImages.length >= 5 ? null : <div>上传图片</div>}
-                  </Upload>
-                  <Button
-                    type="primary"
-                    loading={loading}
-                    disabled={!selectedReviewOrderItem || !reviewContent.trim()}
-                    onClick={() => void reviewSelectedOrder()}
-                    className="btn-order-action"
-                  >
-                    提交评价
-                  </Button>
-                </div>
-              </Card>
-            )}
+            {/* Review & Refund Action Buttons */}
+            <div className="od-action-buttons">
+              {selectedOrder.status === 'completed' && (
+                <Button
+                  icon={<StarOutlined />}
+                  onClick={() => setReviewModalOpen(true)}
+                  className="btn-order-action"
+                >
+                  评价商品
+                </Button>
+              )}
+              {REFUNDABLE_ORDER_STATUS.includes(selectedOrder.status) && (
+                <Button
+                  icon={<SafetyCertificateOutlined />}
+                  onClick={() => setRefundModalOpen(true)}
+                  className="btn-order-action"
+                >
+                  申请售后
+                </Button>
+              )}
+            </div>
 
-            {/* Refund Section */}
-            {REFUNDABLE_ORDER_STATUS.includes(selectedOrder.status) && (
-              <Card className="od-card" title={<span className="od-card-title"><SafetyCertificateOutlined /> 申请售后</span>}>
-                <div className="od-form">
-                  <div className="od-form-row">
-                    <Text type="secondary" className="od-form-label">售后商品</Text>
-                    <Select
-                      style={{ width: 320 }}
-                      value={refundItemValue}
-                      onChange={(value) => setSelectedRefundOrderItemId(value as number)}
-                      options={selectedOrder.items.map((item) => ({
-                        value: item.id,
-                        label: `#${item.id} ${item.product_name} x${item.quantity}`,
-                      }))}
-                    />
-                  </div>
-                  <div className="od-form-row">
-                    <Text type="secondary" className="od-form-label">数量</Text>
-                    <InputNumber
-                      min={1}
-                      max={selectedRefundOrderItem?.quantity || 1}
-                      value={refundQuantity}
-                      onChange={(value) => setRefundQuantity(Number(value) || 1)}
-                    />
-                  </div>
-                  <Input
-                    value={refundReason}
-                    onChange={(event) => setRefundReason(event.target.value)}
-                    placeholder="请填写售后原因"
+            {/* Review Modal */}
+            <Modal
+              title={<span className="od-card-title"><StarOutlined /> 评价商品</span>}
+              open={reviewModalOpen}
+              onCancel={() => setReviewModalOpen(false)}
+              footer={null}
+              destroyOnClose
+            >
+              <div className="od-form">
+                <div className="od-form-row">
+                  <Text type="secondary" className="od-form-label">评价商品</Text>
+                  <Select
+                    style={{ width: 320 }}
+                    value={reviewItemValue}
+                    onChange={(value) => setSelectedReviewOrderItemId(value as number)}
+                    options={selectedOrder.items.map((item) => ({
+                      value: item.id,
+                      label: `#${item.id} ${item.product_name} x${item.quantity}`,
+                    }))}
                   />
-                  <Upload
-                    listType="picture-card"
-                    beforeUpload={(file) => {
-                      void uploadRefundImage(file)
-                      return false
-                    }}
-                    fileList={imageListToFileList(refundImages)}
-                    onRemove={(file) => {
-                      const index = Number(String(file.uid).replace('img-', ''))
-                      if (Number.isFinite(index)) {
-                        setRefundImages((items) => items.filter((_, idx) => idx !== index))
-                      }
-                      return true
-                    }}
-                  >
-                    {refundImages.length >= 5 ? null : <div>上传凭证</div>}
-                  </Upload>
-                  <Button
-                    type="primary"
-                    loading={loading}
-                    disabled={!selectedRefundOrderItem || !refundReason.trim()}
-                    onClick={() => void refundSelectedOrder()}
-                    className="btn-order-action"
-                  >
-                    提交售后
-                  </Button>
                 </div>
-              </Card>
-            )}
+                <div className="od-form-row">
+                  <Text type="secondary" className="od-form-label">评分</Text>
+                  <Rate value={reviewScore} onChange={setReviewScore} />
+                </div>
+                <Input.TextArea
+                  rows={3}
+                  value={reviewContent}
+                  onChange={(event) => setReviewContent(event.target.value)}
+                  placeholder="说说商品体验…"
+                  className="od-textarea"
+                />
+                <Upload
+                  listType="picture-card"
+                  beforeUpload={(file) => {
+                    void uploadReviewImage(file)
+                    return false
+                  }}
+                  fileList={imageListToFileList(reviewImages)}
+                  onRemove={(file) => {
+                    const index = Number(String(file.uid).replace('img-', ''))
+                    if (Number.isFinite(index)) {
+                      setReviewImages((items) => items.filter((_, idx) => idx !== index))
+                    }
+                    return true
+                  }}
+                >
+                  {reviewImages.length >= 5 ? null : <div>上传图片</div>}
+                </Upload>
+                <Button
+                  type="primary"
+                  loading={loading}
+                  disabled={!selectedReviewOrderItem || !reviewContent.trim()}
+                  onClick={() => void reviewSelectedOrder()}
+                  className="btn-order-action"
+                >
+                  提交评价
+                </Button>
+              </div>
+            </Modal>
+
+            {/* Refund Modal */}
+            <Modal
+              title={<span className="od-card-title"><SafetyCertificateOutlined /> 申请售后</span>}
+              open={refundModalOpen}
+              onCancel={() => setRefundModalOpen(false)}
+              footer={null}
+              destroyOnClose
+            >
+              <div className="od-form">
+                <div className="od-form-row">
+                  <Text type="secondary" className="od-form-label">售后商品</Text>
+                  <Select
+                    style={{ width: 320 }}
+                    value={refundItemValue}
+                    onChange={(value) => setSelectedRefundOrderItemId(value as number)}
+                    options={selectedOrder.items.map((item) => ({
+                      value: item.id,
+                      label: `#${item.id} ${item.product_name} x${item.quantity}`,
+                    }))}
+                  />
+                </div>
+                <div className="od-form-row">
+                  <Text type="secondary" className="od-form-label">数量</Text>
+                  <InputNumber
+                    min={1}
+                    max={selectedRefundOrderItem?.quantity || 1}
+                    value={refundQuantity}
+                    onChange={(value) => setRefundQuantity(Number(value) || 1)}
+                  />
+                </div>
+                <Input
+                  value={refundReason}
+                  onChange={(event) => setRefundReason(event.target.value)}
+                  placeholder="请填写售后原因"
+                />
+                <Upload
+                  listType="picture-card"
+                  beforeUpload={(file) => {
+                    void uploadRefundImage(file)
+                    return false
+                  }}
+                  fileList={imageListToFileList(refundImages)}
+                  onRemove={(file) => {
+                    const index = Number(String(file.uid).replace('img-', ''))
+                    if (Number.isFinite(index)) {
+                      setRefundImages((items) => items.filter((_, idx) => idx !== index))
+                    }
+                    return true
+                  }}
+                >
+                  {refundImages.length >= 5 ? null : <div>上传凭证</div>}
+                </Upload>
+                <Button
+                  type="primary"
+                  loading={loading}
+                  disabled={!selectedRefundOrderItem || !refundReason.trim()}
+                  onClick={() => void refundSelectedOrder()}
+                  className="btn-order-action"
+                >
+                  提交售后
+                </Button>
+              </div>
+            </Modal>
           </div>
         )}
 
@@ -675,9 +708,8 @@ export function OrderPage() {
               {refunds.map((refund) => (
                 <div key={refund.id} className="or-item">
                   <div className="or-item-left">
-                    <Tag className="or-tag-id">售后 #{refund.id}</Tag>
                     <Badge color={statusColor(refund.status)} text={statusText(refund.status)} />
-                    <Text type="secondary">订单 #{refund.order_id}</Text>
+                    <Text type="secondary">订单号 {refund.order_id}</Text>
                   </div>
                   <div className="or-item-right">
                     <Text className="or-refund-amount">¥{yuan(refund.refund_amount_cent)}</Text>
@@ -702,7 +734,7 @@ export function OrderPage() {
             <Space direction="vertical" size={16} style={{ width: '100%' }}>
               <Descriptions column={1} size="small" bordered>
                 <Descriptions.Item label="售后单号">{selectedRefundDetail.id}</Descriptions.Item>
-                <Descriptions.Item label="订单号">#{selectedRefundDetail.order_id}</Descriptions.Item>
+                <Descriptions.Item label="订单号">{selectedRefundDetail.order_id}</Descriptions.Item>
                 <Descriptions.Item label="状态">
                   <Badge
                     color={statusColor(selectedRefundDetail.status)}

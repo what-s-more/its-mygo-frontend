@@ -131,7 +131,6 @@ export function PromotionPage() {
                     >
                       <Space direction="vertical" size={6} style={{ width: '100%' }}>
                         <Space wrap>
-                          <Tag color="blue">模板 #{template.id}</Tag>
                           <Text strong>{template.name}</Text>
                           {statusTag(template.status)}
                         </Space>
@@ -182,8 +181,6 @@ export function PromotionPage() {
                   <List.Item>
                     <Space direction="vertical" size={4} style={{ width: '100%' }}>
                       <Space wrap>
-                        <Tag color="blue">用户券 #{coupon.id}</Tag>
-                        <Tag color="purple">模板 #{coupon.coupon_template_id}</Tag>
                         {statusTag(coupon.status)}
                       </Space>
                       <Text strong>{coupon.template.name}</Text>

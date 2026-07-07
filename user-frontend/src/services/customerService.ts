@@ -65,4 +65,8 @@ export const customerService = {
       image_urls: payload.image_urls ?? [],
     })
   },
+
+  deleteConversation(conversationId: number) {
+    return http.delete<unknown, { data: { id: number } }>(`/customer-service/conversations/${conversationId}`)
+  },
 }

@@ -20,6 +20,7 @@ import {
   ShoppingCartOutlined,
   ArrowLeftOutlined,
   FireOutlined,
+  ShopOutlined,
   CustomerServiceOutlined,
 } from '@ant-design/icons'
 import { useEffect, useMemo, useState } from 'react'
@@ -133,6 +134,24 @@ export function ProductDetailPage() {
     }
   }
 
+  async function contactMerchant() {
+    if (!product) return
+    if (!authService.hasToken()) {
+      message.warning('请先登录用户账号')
+      return
+    }
+    try {
+      await customerService.createConversation({
+        target_type: 'merchant',
+        merchant_id: product.merchant.id,
+        product_id: product.id,
+      })
+      navigate('/customer-service')
+    } catch (error) {
+      message.error(`创建客服会话失败：${getApiErrorMessage(error)}`)
+    }
+  }
+
   async function toggleFavorite() {
     if (!product) return
     if (!authService.hasToken()) {
@@ -161,24 +180,6 @@ export function ProductDetailPage() {
       message.success('已加入购物车')
     } catch (error) {
       message.error(`加入购物车失败：${getApiErrorMessage(error)}`)
-    }
-  }
-
-  async function contactMerchant() {
-    if (!product) return
-    if (!authService.hasToken()) {
-      message.warning('请先登录用户账号')
-      return
-    }
-    try {
-      await customerService.createConversation({
-        target_type: 'merchant',
-        merchant_id: product.merchant.id,
-        product_id: product.id,
-      })
-      navigate('/customer-service')
-    } catch (error) {
-      message.error(`创建客服会话失败：${getApiErrorMessage(error)}`)
     }
   }
 
@@ -265,22 +266,27 @@ export function ProductDetailPage() {
                 <div className="detail-title-row">
                   <h1 className="detail-title">{product.name}</h1>
                   <div className="detail-tags">
-                    <Tag className="detail-tag-id">#{product.id}</Tag>
-                    <Link to={`/merchants/${product.merchant.id}`}>
-                      <Tag className="detail-tag-merchant">{product.merchant.name}</Tag>
-                    </Link>
-                    {product.category_id ? (
-                      <Tag className="detail-tag-cat">分类 #{product.category_id}</Tag>
+                    {product.category_name ? (
+                      <Tag className="detail-tag-cat">{product.category_name}</Tag>
                     ) : null}
                   </div>
                 </div>
+
+                {/* Merchant Card */}
+                <Link to={`/merchants/${product.merchant.id}`} className="detail-merchant-card">
+                  <ShopOutlined className="detail-merchant-icon" />
+                  <div className="detail-merchant-info">
+                    <span className="detail-merchant-name">{product.merchant.name}</span>
+                    <span className="detail-merchant-action">进店逛逛 →</span>
+                  </div>
+                </Link>
 
                 {/* Price Block */}
                 <div className="detail-price-block">
                   {groupBuyActivity ? (
                     <div className="detail-price-row">
                       <span className="detail-price-label">拼团价</span>
-                      <Tag color="red" className="detail-tag-group-buy">拼团</Tag>
+                      <FireOutlined className="detail-tag-group-buy" style={{ color: '#ff4d4f', fontSize: 18 }} />
                       <span className="detail-price detail-price-group">¥{yuan(groupBuyActivity.group_price_cent)}</span>
                       <span className="detail-market-price">¥{yuan(selectedSku?.price_cent ?? 0)}</span>
                       <span className="detail-price-savings">
@@ -327,7 +333,7 @@ export function ProductDetailPage() {
                   </div>
                   {selectedSku && (
                     <Text type="secondary" className="detail-sku-stock">
-                      SKU #{selectedSku.id} · 库存 {selectedSku.stock} 件
+                      {selectedSku.name} · 库存 {selectedSku.stock} 件
                     </Text>
                   )}
                 </div>
