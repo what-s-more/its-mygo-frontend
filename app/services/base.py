@@ -1,2 +1,0 @@
-"""Service base placeholder."""
-

@@ -1,2 +1,0 @@
-"""Users API package."""
-
