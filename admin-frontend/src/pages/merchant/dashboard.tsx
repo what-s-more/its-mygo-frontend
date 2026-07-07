@@ -1,6 +1,8 @@
 import { Button, Card, Col, Row, Space, Statistic, Tag, Typography, message } from 'antd'
 import { useEffect, useState } from 'react'
+import { ReportOverviewPanel } from '../../components/ReportOverviewPanel'
 import { http } from '../../services/http'
+import { getMerchantReportOverview, type ReportOverview } from '../../services/report'
 import {
   DebugLogs,
   formatError,
@@ -19,6 +21,8 @@ export function MerchantDashboardPage() {
   const [logs, setLogs] = useState<ApiLog[]>([])
   const [profile, setProfile] = useState<AdminProfile | null>(null)
   const [summary, setSummary] = useState<Summary | null>(null)
+  const [reportOverview, setReportOverview] = useState<ReportOverview | null>(null)
+  const [reportLoading, setReportLoading] = useState(false)
 
   const merchantId = profile?.merchant_id ?? null
 
@@ -50,9 +54,17 @@ export function MerchantDashboardPage() {
     if (data) setSummary(data)
   }
 
+  async function loadReportOverview() {
+    setReportLoading(true)
+    const data = await run<ReportOverview>('本店数据报表', getMerchantReportOverview)
+    if (data) setReportOverview(data)
+    setReportLoading(false)
+  }
+
   useEffect(() => {
     loadMe()
     loadSummary()
+    loadReportOverview()
   }, [])
 
   return (
@@ -66,8 +78,8 @@ export function MerchantDashboardPage() {
         </div>
         <Card>
           <Space direction="vertical">
-            <Text strong style={{ color: '#000000' }}>{profile?.real_name || profile?.username || '未登录商家账号'}</Text>
-            <Text style={{ color: '#1e293b' }}>角色：{statusText(profile?.role)}</Text>
+            <Text strong style={{ color: 'var(--ink)' }}>{profile?.real_name || profile?.username || '未登录商家账号'}</Text>
+            <Text style={{ color: 'var(--body)' }}>角色：{statusText(profile?.role)}</Text>
             <Tag color="purple">店铺 ID：{merchantId ? `#${merchantId}` : '待平台审核'}</Tag>
             <Button onClick={loadMe}>刷新商家状态</Button>
           </Space>
@@ -81,6 +93,13 @@ export function MerchantDashboardPage() {
         <Col span={4}><Card><Statistic title="待发货" value={summary?.pending_shipment_count ?? 0} /></Card></Col>
         <Col span={4}><Card><Statistic title="售后" value={summary?.after_sale_count ?? 0} /></Card></Col>
       </Row>
+
+      <ReportOverviewPanel
+        report={reportOverview}
+        loading={reportLoading}
+        scopeLabel="本店"
+        extra={<Button loading={reportLoading} onClick={loadReportOverview}>刷新报表</Button>}
+      />
 
       <DebugLogs logs={logs} />
     </main>

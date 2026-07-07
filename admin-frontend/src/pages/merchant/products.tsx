@@ -51,7 +51,9 @@ export function MerchantProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [imageUrls, setImageUrls] = useState<string[]>([])
+  const [detailImageUrls, setDetailImageUrls] = useState<string[]>([])
   const [editImageUrls, setEditImageUrls] = useState<string[]>([])
+  const [editDetailImageUrls, setEditDetailImageUrls] = useState<string[]>([])
   const [productFilterForm] = Form.useForm()
 
   const merchantId = profile?.merchant_id ?? null
@@ -156,6 +158,7 @@ export function MerchantProductsPage() {
           description: values.description ?? '',
           cover_url: imageUrls[0] ?? null,
           image_urls: imageUrls,
+          detail_image_urls: detailImageUrls,
           skus: [
             {
               name: values.sku_name,
@@ -170,12 +173,14 @@ export function MerchantProductsPage() {
       ),
     )
     setImageUrls([])
+    setDetailImageUrls([])
     await loadProducts()
   }
 
   function selectProduct(product: Product) {
     setSelectedProduct(product)
     setEditImageUrls(product.images?.length ? product.images : product.cover_url ? [product.cover_url] : [])
+    setEditDetailImageUrls(product.detail_images ?? [])
   }
 
   async function updateSelectedProduct(values: {
@@ -193,6 +198,7 @@ export function MerchantProductsPage() {
           description: values.description ?? '',
           cover_url: editImageUrls[0] ?? null,
           image_urls: editImageUrls,
+          detail_image_urls: editDetailImageUrls,
         },
         { headers: { 'X-Admin-Session': SESSION } },
       ),
@@ -267,6 +273,18 @@ export function MerchantProductsPage() {
     return false
   }
 
+  async function uploadDetailImage(file: File) {
+    const data = await run<{ url: string }>('上传商品详情图片', () => uploadService.uploadImage(file, SESSION))
+    if (data?.url) setDetailImageUrls((items) => [...items, data.url])
+    return false
+  }
+
+  async function uploadEditDetailImage(file: File) {
+    const data = await run<{ url: string }>('上传商品编辑详情图片', () => uploadService.uploadImage(file, SESSION))
+    if (data?.url) setEditDetailImageUrls((items) => [...items, data.url])
+    return false
+  }
+
   useEffect(() => {
     void loadMe()
     void loadCategories()
@@ -283,6 +301,20 @@ export function MerchantProductsPage() {
   const editUploadFiles: UploadFile[] = editImageUrls.map((url, index) => ({
     uid: `${index}`,
     name: url.split('/').pop() || `edit-image-${index}`,
+    status: 'done',
+    url: assetUrl(url),
+  }))
+
+  const detailUploadFiles: UploadFile[] = detailImageUrls.map((url, index) => ({
+    uid: `detail-${index}`,
+    name: url.split('/').pop() || `detail-image-${index}`,
+    status: 'done',
+    url: assetUrl(url),
+  }))
+
+  const editDetailUploadFiles: UploadFile[] = editDetailImageUrls.map((url, index) => ({
+    uid: `edit-detail-${index}`,
+    name: url.split('/').pop() || `edit-detail-image-${index}`,
     status: 'done',
     url: assetUrl(url),
   }))
@@ -375,6 +407,20 @@ export function MerchantProductsPage() {
                   }}
                 >
                   <Button>上传图片</Button>
+                </Upload>
+              </Form.Item>
+              <Form.Item label="商品详情图片" tooltip="图文详情区单独展示，不参与商品轮播图">
+                <Upload
+                  multiple
+                  listType="picture-card"
+                  fileList={detailUploadFiles}
+                  beforeUpload={(file) => uploadDetailImage(file)}
+                  onRemove={(file) => {
+                    setDetailImageUrls((items) => items.filter((item) => assetUrl(item) !== file.url))
+                    return true
+                  }}
+                >
+                  <Button>上传详情图</Button>
                 </Upload>
               </Form.Item>
               <Row gutter={12}>
@@ -483,6 +529,22 @@ export function MerchantProductsPage() {
                           }}
                         >
                           <Button>上传图片</Button>
+                        </Upload>
+                      </Form.Item>
+                    </Col>
+                    <Col span={24}>
+                      <Form.Item label="商品详情图片">
+                        <Upload
+                          multiple
+                          listType="picture-card"
+                          fileList={editDetailUploadFiles}
+                          beforeUpload={(file) => uploadEditDetailImage(file)}
+                          onRemove={(file) => {
+                            setEditDetailImageUrls((items) => items.filter((item) => assetUrl(item) !== file.url))
+                            return true
+                          }}
+                        >
+                          <Button>上传详情图</Button>
                         </Upload>
                       </Form.Item>
                     </Col>

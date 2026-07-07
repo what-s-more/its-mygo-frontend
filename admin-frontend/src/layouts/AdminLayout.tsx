@@ -12,8 +12,10 @@ const menuItems = [
   { path: '/admin/products', label: '商品监管' },
   { path: '/admin/orders', label: '全平台订单' },
   { path: '/admin/refunds', label: '售后处理' },
+  { path: '/admin/customer-service', label: '客服会话' },
   { path: '/admin/coupons', label: '促销管理' },
   { path: '/admin/community', label: '社区内容管理' },
+  { path: '/admin/users', label: '用户管理' },
 ]
 
 export function AdminLayout() {

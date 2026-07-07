@@ -1,6 +1,8 @@
-import { Card, Col, Row, Statistic, Typography, message } from 'antd'
+import { Button, Card, Col, Row, Statistic, Typography, message } from 'antd'
 import { useEffect, useState } from 'react'
+import { ReportOverviewPanel } from '../../components/ReportOverviewPanel'
 import { http } from '../../services/http'
+import { getPlatformReportOverview, type ReportOverview } from '../../services/report'
 import { DebugLogs, formatError, pickData, type ApiLog, yuan } from '../workbench/adminShared'
 import { SESSION, Summary } from './shared'
 
@@ -10,6 +12,8 @@ export function AdminDashboardPage() {
   const [api, contextHolder] = message.useMessage()
   const [logs, setLogs] = useState<ApiLog[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
+  const [reportOverview, setReportOverview] = useState<ReportOverview | null>(null)
+  const [reportLoading, setReportLoading] = useState(false)
 
   async function run<T>(title: string, action: () => Promise<unknown>): Promise<T | null> {
     try {
@@ -30,8 +34,16 @@ export function AdminDashboardPage() {
     if (data) setSummary(data)
   }
 
+  async function loadReportOverview() {
+    setReportLoading(true)
+    const data = await run<ReportOverview>('平台数据报表', getPlatformReportOverview)
+    if (data) setReportOverview(data)
+    setReportLoading(false)
+  }
+
   useEffect(() => {
     void loadSummary()
+    void loadReportOverview()
   }, [])
 
   return (
@@ -52,6 +64,13 @@ export function AdminDashboardPage() {
         <Col span={4}><Card><Statistic title="待发货" value={summary?.pending_shipment_count ?? 0} /></Card></Col>
         <Col span={4}><Card><Statistic title="售后" value={summary?.after_sale_count ?? 0} /></Card></Col>
       </Row>
+
+      <ReportOverviewPanel
+        report={reportOverview}
+        loading={reportLoading}
+        scopeLabel="平台"
+        extra={<Button loading={reportLoading} onClick={loadReportOverview}>刷新报表</Button>}
+      />
 
       <DebugLogs logs={logs} />
     </main>

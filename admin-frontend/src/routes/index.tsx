@@ -7,13 +7,16 @@ import { MerchantApplyPage } from '../pages/workbench/merchantApply'
 import { AdminCategoryPage } from '../pages/admin/category'
 import { AdminCommunityPage } from '../pages/admin/community'
 import { AdminCouponsPage } from '../pages/admin/coupons'
+import { AdminCustomerServicePage } from '../pages/admin/customer-service'
 import { AdminDashboardPage } from '../pages/admin/dashboard'
 import { AdminMerchantReviewPage } from '../pages/admin/merchant-review'
 import { AdminOrdersPage } from '../pages/admin/orders'
 import { AdminProductsPage } from '../pages/admin/products'
 import { AdminRefundsPage } from '../pages/admin/refunds'
+import { UserAdminPage } from '../pages/user/index'
 import { MerchantCommunityPage } from '../pages/merchant/community'
 import { MerchantCouponsPage } from '../pages/merchant/coupons'
+import { MerchantCustomerServicePage } from '../pages/merchant/customer-service'
 import { MerchantDashboardPage } from '../pages/merchant/dashboard'
 import { MerchantFullDiscountsPage } from '../pages/merchant/full-discounts'
 import { MerchantGroupBuyPage } from '../pages/merchant/group-buy'
@@ -55,6 +58,8 @@ export function AppRoutes() {
         <Route path="/admin/refunds" element={<AdminRefundsPage />} />
         <Route path="/admin/coupons" element={<AdminCouponsPage />} />
         <Route path="/admin/community" element={<AdminCommunityPage />} />
+        <Route path="/admin/customer-service" element={<AdminCustomerServicePage />} />
+        <Route path="/admin/users" element={<UserAdminPage />} />
       </Route>
 
       <Route path="/merchant/login" element={<MerchantLoginPage />} />
@@ -64,6 +69,7 @@ export function AppRoutes() {
         <Route path="/merchant/orders" element={<MerchantOrdersPage />} />
         <Route path="/merchant/refunds" element={<MerchantRefundsPage />} />
         <Route path="/merchant/coupons" element={<MerchantCouponsPage />} />
+        <Route path="/merchant/customer-service" element={<MerchantCustomerServicePage />} />
         <Route path="/merchant/full-discounts" element={<MerchantFullDiscountsPage />} />
         <Route path="/merchant/group-buy" element={<MerchantGroupBuyPage />} />
         <Route path="/merchant/community" element={<MerchantCommunityPage />} />

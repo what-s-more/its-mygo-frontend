@@ -14,6 +14,23 @@ import { SESSION, type Order, type OrderDetail, type PageResult, pageList } from
 
 const { Title, Text } = Typography
 
+function downloadTextFile(content: string, filename: string, type = 'text/csv;charset=utf-8') {
+  const blob = new Blob([content], { type })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+function csvFilename(prefix: string) {
+  const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')
+  return `${prefix}-${timestamp}.csv`
+}
+
 export function MerchantOrdersPage() {
   const [api, contextHolder] = message.useMessage()
   const [logs, setLogs] = useState<ApiLog[]>([])
@@ -52,6 +69,22 @@ export function MerchantOrdersPage() {
       http.get(`/admin/orders/${orderId}`, { headers: { 'X-Admin-Session': SESSION } }),
     )
     if (data) setSelectedOrderDetail(data)
+  }
+
+  async function exportOrdersCsv() {
+    try {
+      const content = await http.get<unknown, string>('/admin/orders/export', {
+        responseType: 'text',
+        headers: { 'X-Admin-Session': SESSION },
+      })
+      downloadTextFile(String(content), csvFilename('merchant-orders'))
+      setLogs((items) => [{ title: '导出本店订单 CSV', ok: true, data: 'CSV 文件已下载', time: new Date().toLocaleTimeString() }, ...items].slice(0, 8))
+      api.success('本店订单 CSV 已下载')
+    } catch (error) {
+      const data = formatError(error)
+      setLogs((items) => [{ title: '导出本店订单 CSV', ok: false, data, time: new Date().toLocaleTimeString() }, ...items].slice(0, 8))
+      api.error('导出本店订单 CSV 失败')
+    }
   }
 
   async function shipOrder(orderId: number) {
@@ -114,7 +147,15 @@ export function MerchantOrdersPage() {
         </div>
       </section>
 
-      <Card title="本店订单" extra={<Button onClick={() => loadOrders()}>刷新订单</Button>}>
+      <Card
+        title="本店订单"
+        extra={(
+          <Space>
+            <Button onClick={() => loadOrders()}>刷新订单</Button>
+            <Button onClick={exportOrdersCsv}>导出 CSV</Button>
+          </Space>
+        )}
+      >
         <Form
           form={orderFilterForm}
           layout="inline"

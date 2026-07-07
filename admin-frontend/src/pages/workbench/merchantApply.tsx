@@ -1,9 +1,17 @@
-import { Button, Card, Col, Descriptions, Form, Input, Row, Space, Tag, Typography, message } from 'antd'
+import { Button, Card, Descriptions, Form, Input, Menu, Space, Tag, Typography, message } from 'antd'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { http } from '../../services/http'
 import { DebugLogs, StatusTag, formatError, pickData, type ApiLog } from './adminShared'
 
 const { Title, Paragraph, Text } = Typography
+
+type MenuKey = 'register' | 'status'
+
+const MENU_ITEMS = [
+  { key: 'register', label: '注册商家账号' },
+  { key: 'status', label: '查看申请 / 重新提交' },
+]
 
 type MerchantApplication = {
   id: number
@@ -15,11 +23,14 @@ type MerchantApplication = {
 }
 
 export function MerchantApplyPage() {
+  const navigate = useNavigate()
   const [api, contextHolder] = message.useMessage()
   const [logs, setLogs] = useState<ApiLog[]>([])
   const [application, setApplication] = useState<MerchantApplication | null>(null)
+  const [activeMenu, setActiveMenu] = useState<MenuKey>('register')
   const [loginForm] = Form.useForm()
   const [applyForm] = Form.useForm()
+  const [resubmitForm] = Form.useForm()
 
   async function run<T>(title: string, action: () => Promise<unknown>): Promise<T | null> {
     try {
@@ -46,6 +57,7 @@ export function MerchantApplyPage() {
     if (data) {
       setApplication(data)
       loginForm.setFieldsValue({ username: values.username, password: values.password })
+      setActiveMenu('status')
     }
   }
 
@@ -58,6 +70,7 @@ export function MerchantApplyPage() {
       return response
     })
     await loadApplication()
+    setActiveMenu('status')
   }
 
   async function loadApplication() {
@@ -65,6 +78,9 @@ export function MerchantApplyPage() {
       http.get('/admin/merchant/application/me', { headers: { 'X-Admin-Session': 'merchant' } }),
     )
     setApplication(data ?? null)
+    if (data) {
+      resubmitForm.setFieldsValue({ merchant_name: data.merchant_name, announcement: data.announcement || '' })
+    }
   }
 
   async function resubmit(values: { merchant_name: string; announcement?: string }) {
@@ -85,63 +101,87 @@ export function MerchantApplyPage() {
         </div>
       </section>
 
-      <Row gutter={[24, 24]}>
-        <Col span={8}>
-          <Card title="当前申请状态">
-            {application ? (
-              <Descriptions column={1} size="small">
-                <Descriptions.Item label="申请 ID">#{application.id}</Descriptions.Item>
-                <Descriptions.Item label="店铺">{application.merchant_name}</Descriptions.Item>
-                <Descriptions.Item label="状态"><StatusTag status={application.status} /></Descriptions.Item>
-                <Descriptions.Item label="店铺 ID">{application.merchant_id ? <Tag color="purple">#{application.merchant_id}</Tag> : '审核通过后生成'}</Descriptions.Item>
-                <Descriptions.Item label="拒绝原因">{application.reject_reason || '-'}</Descriptions.Item>
-              </Descriptions>
-            ) : (
-              <Text type="secondary">暂无申请信息，提交或登录后可查看。</Text>
-            )}
-          </Card>
-        </Col>
-        <Col span={8}>
-          <Card title="注册商家账号">
-            <Form
-              layout="vertical"
-              form={applyForm}
-              onFinish={register}
-              initialValues={{
-                username: `merchant_${Math.random().toString(16).slice(2, 8)}`,
-                password: '12345678',
-                real_name: '商家负责人',
-                merchant_name: `申请店铺_${Math.random().toString(16).slice(2, 6)}`,
-                announcement: '说明主营类目、经营范围和入驻理由。',
-              }}
-            >
-              <Form.Item label="登录用户名" name="username" rules={[{ required: true }]}><Input /></Form.Item>
-              <Form.Item label="密码" name="password" rules={[{ required: true, min: 8 }]}><Input.Password /></Form.Item>
-              <Form.Item label="负责人姓名" name="real_name" rules={[{ required: true }]}><Input /></Form.Item>
-              <Form.Item label="店铺名称" name="merchant_name" rules={[{ required: true }]}><Input /></Form.Item>
-              <Form.Item label="入驻申请说明" name="announcement"><Input.TextArea rows={3} /></Form.Item>
-              <Button type="primary" htmlType="submit">提交入驻申请</Button>
-            </Form>
-          </Card>
-        </Col>
-        <Col span={8}>
-          <Card title="商家登录 / 重新提交">
-            <Form layout="vertical" form={loginForm} onFinish={login} initialValues={{ password: '12345678' }}>
-              <Form.Item label="商家账号" name="username" rules={[{ required: true }]}><Input /></Form.Item>
-              <Form.Item label="密码" name="password" rules={[{ required: true, min: 8 }]}><Input.Password /></Form.Item>
-              <Space>
-                <Button type="primary" htmlType="submit">登录并查看申请</Button>
-                <Button onClick={loadApplication}>刷新状态</Button>
-              </Space>
-            </Form>
-            <Form layout="vertical" onFinish={resubmit} className="resubmit-form">
-              <Form.Item label="店铺名称" name="merchant_name" rules={[{ required: true }]}><Input /></Form.Item>
-              <Form.Item label="入驻申请说明" name="announcement"><Input.TextArea rows={3} /></Form.Item>
-              <Button htmlType="submit">重新提交资料</Button>
-            </Form>
-          </Card>
-        </Col>
-      </Row>
+      <div className="onboarding-layout">
+        <aside className="onboarding-sidebar">
+          <Menu
+            mode="inline"
+            selectedKeys={[activeMenu]}
+            items={MENU_ITEMS}
+            onClick={({ key }) => setActiveMenu(key as MenuKey)}
+          />
+          <Button block type="primary" style={{ marginTop: 16 }} onClick={() => navigate('/merchant/login')}>
+            商家后台登录
+          </Button>
+        </aside>
+
+        <section className="onboarding-content">
+          {activeMenu === 'register' ? (
+            <Card title="注册商家账号">
+              <Form
+                layout="vertical"
+                form={applyForm}
+                onFinish={register}
+                initialValues={{
+                  username: `merchant_${Math.random().toString(16).slice(2, 8)}`,
+                  password: '12345678',
+                  real_name: '商家负责人',
+                  merchant_name: `申请店铺_${Math.random().toString(16).slice(2, 6)}`,
+                  announcement: '说明主营类目、经营范围和入驻理由。',
+                }}
+              >
+                <Form.Item label="登录用户名" name="username" rules={[{ required: true }]}><Input /></Form.Item>
+                <Form.Item label="密码" name="password" rules={[{ required: true, min: 8 }]}><Input.Password /></Form.Item>
+                <Form.Item label="负责人姓名" name="real_name" rules={[{ required: true }]}><Input /></Form.Item>
+                <Form.Item label="店铺名称" name="merchant_name" rules={[{ required: true }]}><Input /></Form.Item>
+                <Form.Item label="入驻申请说明" name="announcement"><Input.TextArea rows={3} /></Form.Item>
+                <Button type="primary" htmlType="submit">提交入驻申请</Button>
+              </Form>
+            </Card>
+          ) : (
+            <Space direction="vertical" size="large" style={{ width: '100%' }}>
+              <Card title="当前申请状态">
+                {application ? (
+                  <>
+                    <Descriptions column={1} size="small">
+                      <Descriptions.Item label="申请 ID">#{application.id}</Descriptions.Item>
+                      <Descriptions.Item label="店铺">{application.merchant_name}</Descriptions.Item>
+                      <Descriptions.Item label="状态"><StatusTag status={application.status} /></Descriptions.Item>
+                      <Descriptions.Item label="店铺 ID">{application.merchant_id ? <Tag color="purple">#{application.merchant_id}</Tag> : '审核通过后生成'}</Descriptions.Item>
+                      <Descriptions.Item label="拒绝原因">{application.reject_reason || '-'}</Descriptions.Item>
+                    </Descriptions>
+                    {application.status === 'approved' && (
+                      <Button type="primary" block style={{ marginTop: 16 }} onClick={() => navigate('/merchant/login')}>
+                        入驻已通过，去商家后台登录
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <Text type="secondary">暂无申请信息，请先登录或提交入驻申请。</Text>
+                )}
+              </Card>
+
+              <Card title="商家登录">
+                <Form layout="vertical" form={loginForm} onFinish={login} initialValues={{ password: '12345678' }}>
+                  <Form.Item label="商家账号" name="username" rules={[{ required: true }]}><Input /></Form.Item>
+                  <Form.Item label="密码" name="password" rules={[{ required: true, min: 8 }]}><Input.Password /></Form.Item>
+                  <Space>
+                    <Button type="primary" htmlType="submit">登录并查看申请</Button>
+                    <Button onClick={loadApplication}>刷新状态</Button>
+                  </Space>
+                </Form>
+              </Card>
+
+              <Card title="重新提交资料">
+                <Form layout="vertical" form={resubmitForm} onFinish={resubmit}>
+                  <Form.Item label="店铺名称" name="merchant_name" rules={[{ required: true }]}><Input /></Form.Item>
+                  <Form.Item label="入驻申请说明" name="announcement"><Input.TextArea rows={3} /></Form.Item>
+                  <Button htmlType="submit">重新提交资料</Button>
+                </Form>
+              </Card>
+            </Space>
+          )}
+        </section>
+      </div>
 
       <DebugLogs logs={logs} />
     </main>

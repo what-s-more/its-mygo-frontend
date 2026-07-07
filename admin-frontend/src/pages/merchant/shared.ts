@@ -32,6 +32,7 @@ export type Product = {
   description?: string
   cover_url?: string | null
   images?: string[]
+  detail_images?: string[]
   category_id?: number | null
   status: string
   merchant: { id: number; name: string }

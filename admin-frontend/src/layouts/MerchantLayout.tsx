@@ -13,6 +13,7 @@ const menuItems = [
   { path: '/merchant/products', label: '商品管理' },
   { path: '/merchant/orders', label: '本店订单' },
   { path: '/merchant/refunds', label: '本店售后' },
+  { path: '/merchant/customer-service', label: '客服会话' },
   { path: '/merchant/coupons', label: '本店优惠券' },
   { path: '/merchant/full-discounts', label: '本店满减活动' },
   { path: '/merchant/group-buy', label: '拼团配置' },
