@@ -431,6 +431,32 @@ export function OrderPage() {
                           取消订单
                         </Button>
                       )}
+                      {order.status === 'completed' && (
+                        <Button
+                          size="small"
+                          icon={<StarOutlined />}
+                          className="btn-order-action"
+                          onClick={() => {
+                            void selectOrderForPayment(order)
+                            setReviewModalOpen(true)
+                          }}
+                        >
+                          评价商品
+                        </Button>
+                      )}
+                      {REFUNDABLE_ORDER_STATUS.includes(order.status) && (
+                        <Button
+                          size="small"
+                          icon={<SafetyCertificateOutlined />}
+                          className="btn-order-action"
+                          onClick={() => {
+                            void selectOrderForPayment(order)
+                            setRefundModalOpen(true)
+                          }}
+                        >
+                          申请售后
+                        </Button>
+                      )}
                       <Button
                         size="small"
                         icon={<CustomerServiceOutlined />}
@@ -533,28 +559,6 @@ export function OrderPage() {
                 </Spin>
               </Card>
             )}
-
-            {/* Review & Refund Action Buttons */}
-            <div className="od-action-buttons">
-              {selectedOrder.status === 'completed' && (
-                <Button
-                  icon={<StarOutlined />}
-                  onClick={() => setReviewModalOpen(true)}
-                  className="btn-order-action"
-                >
-                  评价商品
-                </Button>
-              )}
-              {REFUNDABLE_ORDER_STATUS.includes(selectedOrder.status) && (
-                <Button
-                  icon={<SafetyCertificateOutlined />}
-                  onClick={() => setRefundModalOpen(true)}
-                  className="btn-order-action"
-                >
-                  申请售后
-                </Button>
-              )}
-            </div>
 
             {/* Review Modal */}
             <Modal
