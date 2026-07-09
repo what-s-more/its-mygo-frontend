@@ -1,6 +1,7 @@
 import {
   Button,
   Card,
+  Carousel,
   Empty,
   Image,
   Input,
@@ -13,10 +14,12 @@ import {
   Typography,
   message,
 } from 'antd'
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
-import { useEffect, useMemo, useState } from 'react'
+import { LeftOutlined, ReloadOutlined, RightOutlined, SearchOutlined } from '@ant-design/icons'
+import type { CarouselRef } from 'antd/es/carousel'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getApiErrorMessage } from '../../services/http'
+import { homeService, type HomeBanner } from '../../services/home'
 import {
   productService,
   type Category,
@@ -47,7 +50,9 @@ type PageData<T> = {
 }
 
 export function ProductPage() {
+  const bannerCarouselRef = useRef<CarouselRef>(null)
   const [categories, setCategories] = useState<Category[]>([])
+  const [banners, setBanners] = useState<HomeBanner[]>([])
   const [categoryId, setCategoryId] = useState<number | undefined>()
   const [keyword, setKeyword] = useState('')
   const [minPriceYuan, setMinPriceYuan] = useState<number | null>(null)
@@ -81,6 +86,57 @@ export function ProductPage() {
     }
     return (childrenByParent.get(null) ?? []).flatMap((parent) => walk(parent, 1, []))
   }, [categories])
+
+  const categoriesByParent = useMemo(() => {
+    const byParent = new Map<number | null, CategoryTreeItem[]>()
+    categoryTree.forEach((category) => {
+      const parentId = category.parent_id ?? null
+      byParent.set(parentId, [...(byParent.get(parentId) ?? []), category])
+    })
+    return byParent
+  }, [categoryTree])
+
+  const categoryById = useMemo(() => {
+    const map = new Map<number, CategoryTreeItem>()
+    categoryTree.forEach((category) => map.set(category.id, category))
+    return map
+  }, [categoryTree])
+
+  const selectedCategoryPath = useMemo(() => {
+    if (!categoryId) return []
+    const path: CategoryTreeItem[] = []
+    let current = categoryById.get(categoryId)
+    const visited = new Set<number>()
+    while (current && !visited.has(current.id)) {
+      visited.add(current.id)
+      path.unshift(current)
+      current = current.parent_id ? categoryById.get(current.parent_id) : undefined
+    }
+    return path
+  }, [categoryById, categoryId])
+
+  const topCategories = useMemo(
+    () => (categoriesByParent.get(null) ?? []).filter((category) => category.name !== '本地服务'),
+    [categoriesByParent],
+  )
+
+  const visibleCategoryLevels = useMemo(() => {
+    return selectedCategoryPath
+      .map((category) => ({
+        parent: category,
+        children: categoriesByParent.get(category.id) ?? [],
+      }))
+      .filter((level) => level.children.length > 0)
+  }, [categoriesByParent, selectedCategoryPath])
+
+  async function loadBanners() {
+    try {
+      const response = await homeService.listBanners()
+      setBanners(response.data ?? [])
+    } catch {
+      setBanners([])
+    }
+  }
 
   async function loadCategories() {
     try {
@@ -123,6 +179,7 @@ export function ProductPage() {
   }
 
   useEffect(() => {
+    void loadBanners()
     void loadCategories()
     void loadProducts(undefined, 1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -140,13 +197,10 @@ export function ProductPage() {
         <Title level={3} className="product-header-title">
           发现好物
         </Title>
-        <Paragraph className="product-header-sub">
-          品质生活，从这里开始
-        </Paragraph>
         <Input
           size="large"
           allowClear
-          placeholder="搜索你想要的商品…"
+          placeholder="品质生活，从这里开始"
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           onPressEnter={() => loadProducts(categoryId, 1)}
@@ -160,32 +214,130 @@ export function ProductPage() {
         />
       </header>
 
+      <section className="home-banner-section">
+        {banners.length > 0 ? (
+          <>
+            <Carousel ref={bannerCarouselRef} autoplay dots className="home-banner-carousel">
+              {banners.map((banner) => {
+                const link =
+                  banner.target_type === 'product' && banner.target_id
+                    ? `/products/${banner.target_id}`
+                    : banner.target_type === 'url' && banner.target_url
+                      ? banner.target_url
+                      : undefined
+                const content = (
+                  <div className="home-banner-slide">
+                    <img
+                      src={absoluteAssetUrl(banner.image_url)}
+                      alt={banner.title}
+                      className="home-banner-image"
+                    />
+                    <div className="home-banner-copy">
+                      <Title level={2} className="home-banner-title">{banner.title}</Title>
+                      {banner.subtitle ? <Paragraph className="home-banner-subtitle">{banner.subtitle}</Paragraph> : null}
+                    </div>
+                  </div>
+                )
+                return (
+                  <div key={banner.id}>
+                    {link ? (
+                      /^https?:\/\//.test(link) ? (
+                        <a href={link} target="_blank" rel="noreferrer" className="home-banner-link">
+                          {content}
+                        </a>
+                      ) : (
+                        <Link to={link} className="home-banner-link">
+                          {content}
+                        </Link>
+                      )
+                    ) : (
+                      content
+                    )}
+                  </div>
+                )
+              })}
+            </Carousel>
+            {banners.length > 1 ? (
+              <>
+                <Button
+                  shape="circle"
+                  aria-label="上一张轮播图"
+                  icon={<LeftOutlined />}
+                  className="home-banner-nav home-banner-nav-prev"
+                  onClick={() => bannerCarouselRef.current?.prev()}
+                />
+                <Button
+                  shape="circle"
+                  aria-label="下一张轮播图"
+                  icon={<RightOutlined />}
+                  className="home-banner-nav home-banner-nav-next"
+                  onClick={() => bannerCarouselRef.current?.next()}
+                />
+              </>
+            ) : null}
+          </>
+        ) : (
+          <div className="home-banner-slide home-banner-fallback">
+            <div className="home-banner-copy">
+              <Title level={2} className="home-banner-title">发现好物与真实分享</Title>
+              <Paragraph className="home-banner-subtitle">平台轮播图可在管理端“首页轮播”中配置。</Paragraph>
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* ── Filter Bar ── */}
       <div className="product-filter-bar">
         {/* Category chips */}
         <div className="filter-section">
           <Text className="filter-section-label">分类</Text>
-          <div className="filter-chips">
-            <Button
-              shape="round"
-              type={categoryId === undefined ? 'primary' : 'default'}
-              size="small"
-              onClick={() => setCategoryId(undefined)}
-              className="filter-chip"
-            >
-              全部
-            </Button>
-            {categoryTree.filter((cat) => cat.name !== '本地服务').slice(0, 24).map((cat) => (
+          <div className="filter-category-stack">
+            <div className="filter-chips">
               <Button
-                key={cat.id}
                 shape="round"
-                type={categoryId === cat.id ? 'primary' : 'default'}
+                type={categoryId === undefined ? 'primary' : 'default'}
                 size="small"
-                onClick={() => setCategoryId(cat.id)}
+                onClick={() => setCategoryId(undefined)}
                 className="filter-chip"
               >
-                {cat.name}
+                全部
               </Button>
+              {topCategories.map((category) => (
+                <Button
+                  key={category.id}
+                  shape="round"
+                  type={selectedCategoryPath.some((item) => item.id === category.id) ? 'primary' : 'default'}
+                  size="small"
+                  onClick={() => setCategoryId(category.id)}
+                  className="filter-chip"
+                >
+                  {category.name}
+                </Button>
+              ))}
+            </div>
+            {selectedCategoryPath.length > 0 ? (
+              <div className="filter-current-category">
+                {selectedCategoryPath.map((item) => item.name).join(' / ')}
+              </div>
+            ) : null}
+            {visibleCategoryLevels.map((level) => (
+              <div className="filter-subcategory-row" key={level.parent.id}>
+                <Text type="secondary" className="filter-subcategory-label">{level.parent.name}</Text>
+                <div className="filter-chips">
+                  {level.children.map((category) => (
+                    <Button
+                      key={category.id}
+                      shape="round"
+                      type={categoryId === category.id ? 'primary' : 'default'}
+                      size="small"
+                      onClick={() => setCategoryId(category.id)}
+                      className="filter-chip filter-subcategory-chip"
+                    >
+                      {category.name}
+                    </Button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -259,11 +411,12 @@ export function ProductPage() {
           ) : (
             <>
               <div className="product-grid">
-                {products.map((product) => (
+                {products.map((product, index) => (
                   <Link
                     to={`/products/${product.id}`}
                     key={product.id}
                     className="product-card-link"
+                    style={{ animationDelay: `${0.3 + index * 0.04}s` }}
                   >
                     <Card
                       hoverable
@@ -282,6 +435,7 @@ export function ProductPage() {
                               <Text type="secondary">暂无图片</Text>
                             </div>
                           )}
+                          <div className="pec-cover-view">查看详情 →</div>
                         </div>
                       }
                     >

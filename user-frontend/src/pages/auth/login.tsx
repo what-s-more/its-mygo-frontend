@@ -1,6 +1,6 @@
 import { Form, Input, Button, Typography, Divider, message } from 'antd'
 import { LockOutlined, MobileOutlined } from '@ant-design/icons'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { authService } from '../../services/auth'
 
@@ -8,13 +8,15 @@ const { Title, Text, Paragraph } = Typography
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [api, contextHolder] = message.useMessage()
+  const redirect = searchParams.get('redirect') || '/'
 
   async function handleSubmit(values: { account: string; password: string }) {
     try {
       await authService.login(values)
       api.success('登录成功，正在进入商城')
-      navigate('/')
+      navigate(redirect)
     } catch {
       api.error('登录失败，请检查手机号和密码')
     }

@@ -1,16 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Badge,
+  Avatar,
   Button,
   Card,
-  Descriptions,
   Empty,
   Input,
   InputNumber,
-  List,
   Modal,
   Pagination,
-  QRCode,
   Rate,
   Select,
   Space,
@@ -22,20 +20,20 @@ import {
 } from 'antd'
 import type { UploadFile } from 'antd'
 import {
-  ReloadOutlined,
   ShoppingCartOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  FileTextOutlined,
   StarOutlined,
   SafetyCertificateOutlined,
-  CustomerServiceOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import { orderService, type Order, type Payment, type Refund } from '../../services/order'
-import { customerService } from '../../services/customerService'
+import { orderService, type Order, type Refund } from '../../services/order'
 import { uploadService } from '../../services/upload'
+import { ProductThumb } from '../../components/ProductThumb'
 import { getApiErrorMessage } from '../../services/http'
-import { yuan, statusText, statusColor, randomToken, pickErrorMessage } from '../../utils/format'
+import { absoluteAssetUrl, yuan, statusText, statusColor } from '../../utils/format'
+import { fillMissingProductCovers } from '../../utils/product-cover'
 
 const { Paragraph, Text, Title } = Typography
 
@@ -51,22 +49,32 @@ const ORDER_STATUS_TABS = [
   { value: 'closed', label: '已关闭' },
 ]
 
-const REFUND_STATUS_OPTIONS = [
-  { value: 'pending_approval', label: '售后待审核' },
-  { value: 'approved', label: '售后已同意' },
-  { value: 'received', label: '已收到退货' },
-  { value: 'refunded', label: '已退款' },
-  { value: 'rejected', label: '售后已拒绝' },
-]
-
 const REFUNDABLE_ORDER_STATUS = ['shipping', 'pending_receipt', 'completed']
 
 function imageListToFileList(urls: string[]): UploadFile[] {
   return urls.map((url, index) => ({
     uid: `img-${index}`,
     name: url.split('/').pop() || `图片 ${index + 1}`,
-    url,
+    url: absoluteAssetUrl(url),
     status: 'done',
+  }))
+}
+
+function removeUploadedImage(items: string[], file: UploadFile) {
+  const index = Number(String(file.uid).replace('img-', ''))
+  if (Number.isFinite(index)) {
+    return items.filter((_, idx) => idx !== index)
+  }
+  return items.filter((item) => item !== file.url && absoluteAssetUrl(item) !== file.url)
+}
+
+async function fillOrderItemCovers(orders: Order[]): Promise<Order[]> {
+  const items = orders.flatMap((order) => order.items)
+  const filledItems = await fillMissingProductCovers(items)
+  const itemMap = new Map(filledItems.map((item) => [item.id, item]))
+  return orders.map((order) => ({
+    ...order,
+    items: order.items.map((item) => itemMap.get(item.id) ?? item),
   }))
 }
 
@@ -78,13 +86,6 @@ export function OrderPage() {
   const [orderPage, setOrderPage] = useState(1)
   const [orderPageSize, setOrderPageSize] = useState(6)
   const [orderTotal, setOrderTotal] = useState(0)
-  const [paymentId, setPaymentId] = useState<number | undefined>()
-  const [paymentDetail, setPaymentDetail] = useState<Payment | null>(null)
-  const [alipayQrCode, setAlipayQrCode] = useState('')
-  const [alipayLoading, setAlipayLoading] = useState(false)
-  const [refunds, setRefunds] = useState<Refund[]>([])
-  const [refundStatusFilter, setRefundStatusFilter] = useState<string | undefined>()
-  const [selectedRefundDetail, setSelectedRefundDetail] = useState<Refund | null>(null)
   const [reviewScore, setReviewScore] = useState(5)
   const [reviewContent, setReviewContent] = useState('')
   const [reviewImages, setReviewImages] = useState<string[]>([])
@@ -124,14 +125,14 @@ export function OrderPage() {
         orderService.listOrders({ status: orderStatusFilter, page: nextPage, page_size: nextPageSize }),
       )
       if (data) {
-        const list = data.list ?? []
+        const list = await fillOrderItemCovers(data.list ?? [])
         setOrderPage(data.page ?? nextPage)
         setOrderPageSize(data.page_size ?? nextPageSize)
         setOrderTotal(data.total ?? list.length)
         setOrders(list)
         const currentOrder = selectedOrderId ? list.find((order) => order.id === selectedOrderId) : undefined
         if (!currentOrder && list[0]) {
-          await selectOrderForPayment(list[0])
+          selectOrderForAction(list[0])
         }
       }
     } finally {
@@ -139,58 +140,11 @@ export function OrderPage() {
     }
   }
 
-  async function loadPaymentDetail(nextPaymentId = paymentId) {
-    if (!nextPaymentId) return
-    const data = await run<Payment>('支付单详情', () => orderService.getPayment(nextPaymentId))
-    if (data) {
-      setPaymentDetail(data)
-      setAlipayQrCode(data.alipay_qr_code || '')
-    }
-  }
-
-  async function selectOrderForPayment(order: Order) {
+  function selectOrderForAction(order: Order) {
     setSelectedOrderId(order.id)
-    setPaymentId(order.payment_id)
     setSelectedReviewOrderItemId(order.items[0]?.id)
     setSelectedRefundOrderItemId(order.items[0]?.id)
     setRefundQuantity(1)
-    setAlipayQrCode('')
-    await loadPaymentDetail(order.payment_id)
-  }
-
-  async function createAlipayQrCode(force = false) {
-    if (!paymentId || alipayLoading) return
-    setAlipayLoading(true)
-    try {
-      const data = await run('支付宝扫码支付', () => orderService.precreateAlipay(paymentId, force))
-      if (data) {
-        setAlipayQrCode(data.qr_code)
-        setPaymentDetail(data.payment)
-        message.success(force ? '支付宝二维码已刷新' : '支付宝二维码已生成')
-      }
-    } finally {
-      setAlipayLoading(false)
-    }
-  }
-
-  async function syncAlipayPayment() {
-    if (!paymentId) return
-    setLoading(true)
-    try {
-      const data = await run<Payment>('同步支付宝支付结果', () => orderService.syncAlipay(paymentId))
-      if (data) {
-        setPaymentDetail(data)
-        setAlipayQrCode(data.alipay_qr_code || '')
-        if (data.status === 'paid') {
-          message.success('支付结果已同步')
-        } else {
-          message.info('支付宝尚未查到已支付交易，请确认使用沙箱买家账号扫码付款后再同步')
-        }
-        await loadOrders()
-      }
-    } finally {
-      setLoading(false)
-    }
   }
 
   async function confirmOrder(orderId: number) {
@@ -213,19 +167,9 @@ export function OrderPage() {
       if (data) {
         message.success('订单已取消')
         await loadOrders()
-        if (paymentId) await loadPaymentDetail(paymentId)
       }
     } finally {
       setLoading(false)
-    }
-  }
-
-  async function contactCustomerService(order: Order) {
-    try {
-      await customerService.createConversation({ target_type: 'platform', order_id: order.id })
-      navigate('/customer-service')
-    } catch (error) {
-      message.error(`创建客服会话失败：${getApiErrorMessage(error)}`)
     }
   }
 
@@ -279,21 +223,10 @@ export function OrderPage() {
         setRefundReason('')
         setRefundModalOpen(false)
         await loadOrders()
-        await loadRefunds()
       }
     } finally {
       setLoading(false)
     }
-  }
-
-  async function loadRefunds() {
-    const data = await run('我的售后', () => orderService.listRefunds({ status: refundStatusFilter }))
-    setRefunds(data?.list ?? [])
-  }
-
-  async function openRefundDetail(refundId: number) {
-    const data = await run<Refund>('售后详情', () => orderService.getRefund(refundId))
-    if (data) setSelectedRefundDetail(data)
   }
 
   async function uploadReviewImage(file: File) {
@@ -312,10 +245,6 @@ export function OrderPage() {
     setOrderPage(1)
     void loadOrders(1, orderPageSize)
   }, [orderStatusFilter])
-
-  useEffect(() => {
-    void loadRefunds()
-  }, [refundStatusFilter])
 
   const reviewItemValue = selectedReviewOrderItemId ?? selectedReviewOrderItem?.id
   const refundItemValue = selectedRefundOrderItemId ?? selectedRefundOrderItem?.id
@@ -363,12 +292,25 @@ export function OrderPage() {
                 <div
                   key={order.id}
                   className={`order-card ${order.id === selectedOrderId ? 'order-card-selected' : ''}`}
-                  onClick={() => void selectOrderForPayment(order)}
+                  onClick={() => navigate(`/orders/${order.id}`)}
                 >
                   {/* Card Header */}
                   <div className="oc-header">
                     <div className="oc-header-left">
-                      <Text type="secondary" className="oc-order-no">{order.order_no}</Text>
+                      <div className="oc-merchant">
+                        <Avatar
+                          size={42}
+                          shape="square"
+                          src={absoluteAssetUrl(order.merchant_logo_url)}
+                          className="oc-merchant-avatar"
+                        >
+                          {(order.merchant_name || '店铺')[0]}
+                        </Avatar>
+                        <div className="oc-merchant-info">
+                          <Text strong>{order.merchant_name || '未知商家'}</Text>
+                          <Text type="secondary" className="oc-order-no">{order.order_no}</Text>
+                        </div>
+                      </div>
                       {order.order_type === 'grass' ? <Tag color="purple" className="oc-tag-type">{statusText(order.order_type)}</Tag> : order.order_type === 'group_buy' ? <Tag className="oc-tag-type">{statusText(order.order_type)}</Tag> : null}
                       {order.source_post_id && (
                         <Tag color="purple">种草来源</Tag>
@@ -383,6 +325,9 @@ export function OrderPage() {
                   <div className="oc-items">
                     {order.items.map((item) => (
                       <div key={item.id} className="oc-item">
+                        <div className="oc-item-cover">
+                          <ProductThumb src={item.cover_url} alt={item.product_name} />
+                        </div>
                         <div className="oc-item-info">
                           <Text className="oc-item-name">{item.product_name}</Text>
                           <Text type="secondary" className="oc-item-sku">{item.sku_name}</Text>
@@ -437,7 +382,7 @@ export function OrderPage() {
                           icon={<StarOutlined />}
                           className="btn-order-action"
                           onClick={() => {
-                            void selectOrderForPayment(order)
+                            selectOrderForAction(order)
                             setReviewModalOpen(true)
                           }}
                         >
@@ -450,19 +395,15 @@ export function OrderPage() {
                           icon={<SafetyCertificateOutlined />}
                           className="btn-order-action"
                           onClick={() => {
-                            void selectOrderForPayment(order)
+                            selectOrderForAction(order)
                             setRefundModalOpen(true)
                           }}
                         >
                           申请售后
                         </Button>
                       )}
-                      <Button
-                        size="small"
-                        icon={<CustomerServiceOutlined />}
-                        onClick={() => void contactCustomerService(order)}
-                      >
-                        联系客服
+                      <Button size="small" icon={<FileTextOutlined />} onClick={() => navigate(`/orders/${order.id}`)}>
+                        查看详情
                       </Button>
                     </div>
                   </div>
@@ -488,78 +429,9 @@ export function OrderPage() {
           )}
         </div>
 
-        {/* ── Selected Order Detail Panel ── */}
+        {/* ── Order action modals ── */}
         {selectedOrder && (
           <div className="order-detail-section">
-            {/* Payment Info */}
-            {paymentDetail && (
-              <Card className="od-card" title={<span className="od-card-title">支付信息</span>}>
-                <div className="od-payment-grid">
-                  <div className="od-payment-field">
-                    <span className="od-field-label">支付单号</span>
-                    <span className="od-field-value">{paymentDetail.payment_no}</span>
-                  </div>
-                  <div className="od-payment-field">
-                    <span className="od-field-label">渠道</span>
-                    <span className="od-field-value">{paymentDetail.channel}</span>
-                  </div>
-                  <div className="od-payment-field">
-                    <span className="od-field-label">状态</span>
-                    <Badge color={statusColor(paymentDetail.status)} text={statusText(paymentDetail.status)} />
-                  </div>
-                  <div className="od-payment-field">
-                    <span className="od-field-label">金额</span>
-                    <span className="od-amount-value">¥{yuan(paymentDetail.pay_amount_cent)}</span>
-                  </div>
-                  <div className="od-payment-field">
-                    <span className="od-field-label">支付宝交易号</span>
-                    <span className="od-field-value">{paymentDetail.alipay_trade_no || '-'}</span>
-                  </div>
-                  <div className="od-payment-field">
-                    <span className="od-field-label">关联订单</span>
-                    <span className="od-field-value">{paymentDetail.order_ids?.map((id) => `#${id}`).join('、') || '-'}</span>
-                  </div>
-                </div>
-
-                {/* Alipay QR Section */}
-                <Spin spinning={alipayLoading} tip="正在生成二维码…">
-                  <div className="od-qr-section">
-                    {selectedOrder.status === 'pending_payment' && (
-                      <>
-                        {alipayQrCode ? (
-                          <div className="od-qr-area">
-                            <QRCode value={alipayQrCode} size={160} className="od-qr-code" />
-                            <Text type="secondary" className="od-qr-hint">
-                              请使用支付宝沙箱买家账号扫码付款
-                            </Text>
-                            <Text copyable type="secondary" className="od-qr-raw">
-                              {alipayQrCode}
-                            </Text>
-                          </div>
-                        ) : (
-                          <Empty description="待生成二维码" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                        )}
-                        <div className="od-qr-actions">
-                          <Button
-                            type="primary"
-                            loading={alipayLoading}
-                            icon={<ReloadOutlined />}
-                            onClick={() => void createAlipayQrCode(true)}
-                            className="btn-order-action"
-                          >
-                            生成/刷新二维码
-                          </Button>
-                          <Button onClick={() => void syncAlipayPayment()}>
-                            同步支付宝结果
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </Spin>
-              </Card>
-            )}
-
             {/* Review Modal */}
             <Modal
               title={<span className="od-card-title"><StarOutlined /> 评价商品</span>}
@@ -577,7 +449,7 @@ export function OrderPage() {
                     onChange={(value) => setSelectedReviewOrderItemId(value as number)}
                     options={selectedOrder.items.map((item) => ({
                       value: item.id,
-                      label: `#${item.id} ${item.product_name} x${item.quantity}`,
+                      label: `${item.id} ${item.product_name} x${item.quantity}`,
                     }))}
                   />
                 </div>
@@ -600,10 +472,7 @@ export function OrderPage() {
                   }}
                   fileList={imageListToFileList(reviewImages)}
                   onRemove={(file) => {
-                    const index = Number(String(file.uid).replace('img-', ''))
-                    if (Number.isFinite(index)) {
-                      setReviewImages((items) => items.filter((_, idx) => idx !== index))
-                    }
+                    setReviewImages((items) => removeUploadedImage(items, file))
                     return true
                   }}
                 >
@@ -638,7 +507,7 @@ export function OrderPage() {
                     onChange={(value) => setSelectedRefundOrderItemId(value as number)}
                     options={selectedOrder.items.map((item) => ({
                       value: item.id,
-                      label: `#${item.id} ${item.product_name} x${item.quantity}`,
+                      label: `${item.id} ${item.product_name} x${item.quantity}`,
                     }))}
                   />
                 </div>
@@ -664,10 +533,7 @@ export function OrderPage() {
                   }}
                   fileList={imageListToFileList(refundImages)}
                   onRemove={(file) => {
-                    const index = Number(String(file.uid).replace('img-', ''))
-                    if (Number.isFinite(index)) {
-                      setRefundImages((items) => items.filter((_, idx) => idx !== index))
-                    }
+                    setRefundImages((items) => removeUploadedImage(items, file))
                     return true
                   }}
                 >
@@ -686,96 +552,6 @@ export function OrderPage() {
             </Modal>
           </div>
         )}
-
-        {/* ── Refund Records ── */}
-        <Card
-          className="od-card order-refund-card"
-          title={<span className="od-card-title"><SafetyCertificateOutlined /> 售后记录</span>}
-          extra={
-            <Space>
-              <Text type="secondary">状态筛选</Text>
-              <Select
-                allowClear
-                style={{ width: 150 }}
-                placeholder="全部状态"
-                value={refundStatusFilter}
-                onChange={(value) => setRefundStatusFilter(value as string | undefined)}
-                options={REFUND_STATUS_OPTIONS}
-              />
-            </Space>
-          }
-        >
-          {refunds.length === 0 ? (
-            <Empty description="暂无售后记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-          ) : (
-            <div className="order-refund-list">
-              {refunds.map((refund) => (
-                <div key={refund.id} className="or-item">
-                  <div className="or-item-left">
-                    <Badge color={statusColor(refund.status)} text={statusText(refund.status)} />
-                    <Text type="secondary">订单号 {refund.order_id}</Text>
-                  </div>
-                  <div className="or-item-right">
-                    <Text className="or-refund-amount">¥{yuan(refund.refund_amount_cent)}</Text>
-                    <Text type="secondary">x{refund.quantity}</Text>
-                    <Text type="secondary" ellipsis style={{ maxWidth: 160 }}>{refund.reason}</Text>
-                    <Button size="small" onClick={() => void openRefundDetail(refund.id)}>详情</Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        {/* ── Refund Detail Modal ── */}
-        <Modal
-          open={!!selectedRefundDetail}
-          title={selectedRefundDetail ? `售后详情 #${selectedRefundDetail.id}` : '售后详情'}
-          footer={<Button onClick={() => setSelectedRefundDetail(null)}>关闭</Button>}
-          onCancel={() => setSelectedRefundDetail(null)}
-        >
-          {selectedRefundDetail ? (
-            <Space direction="vertical" size={16} style={{ width: '100%' }}>
-              <Descriptions column={1} size="small" bordered>
-                <Descriptions.Item label="售后单号">{selectedRefundDetail.id}</Descriptions.Item>
-                <Descriptions.Item label="订单号">{selectedRefundDetail.order_id}</Descriptions.Item>
-                <Descriptions.Item label="状态">
-                  <Badge
-                    color={statusColor(selectedRefundDetail.status)}
-                    text={statusText(selectedRefundDetail.status)}
-                  />
-                </Descriptions.Item>
-                <Descriptions.Item label="数量">{selectedRefundDetail.quantity}</Descriptions.Item>
-                <Descriptions.Item label="退款金额">￥{yuan(selectedRefundDetail.refund_amount_cent)}</Descriptions.Item>
-                <Descriptions.Item label="原因类型">{statusText(selectedRefundDetail.reason_type)}</Descriptions.Item>
-                <Descriptions.Item label="原因">{selectedRefundDetail.reason}</Descriptions.Item>
-                <Descriptions.Item label="凭证">
-                  {selectedRefundDetail.image_urls?.length ? selectedRefundDetail.image_urls.join('、') : '-'}
-                </Descriptions.Item>
-              </Descriptions>
-              {selectedRefundDetail.logs?.length ? (
-                <List
-                  size="small"
-                  header={<Text strong>处理日志</Text>}
-                  dataSource={selectedRefundDetail.logs}
-                  renderItem={(log) => (
-                    <List.Item>
-                      <Space direction="vertical" size={0}>
-                        <Text>
-                          [{statusText(log.action)}] {log.message}
-                        </Text>
-                        <Text type="secondary">
-                          {log.operator_type}
-                          {log.created_at ? ` · ${log.created_at}` : ''}
-                        </Text>
-                      </Space>
-                    </List.Item>
-                  )}
-                />
-              ) : null}
-            </Space>
-          ) : null}
-        </Modal>
       </Spin>
     </div>
   )

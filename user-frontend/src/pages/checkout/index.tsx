@@ -10,8 +10,10 @@ import {
   Input,
   InputNumber,
   Modal,
+  QRCode,
   Radio,
   Select,
+  Space,
   Spin,
   Switch,
   Tag,
@@ -32,8 +34,10 @@ import { addressService, type Address, type AddressPayload } from '../../service
 import { authService, type PointsAccount, type UserProfile } from '../../services/auth'
 import { getApiErrorMessage } from '../../services/http'
 import { groupBuyService, type GroupBuyActivity, type GroupBuyGroup } from '../../services/groupBuy'
-import { orderService, type CheckoutResult } from '../../services/order'
+import { orderService, type AlipayPrecreateResult, type CheckoutResult, type Payment } from '../../services/order'
+import { ProductThumb } from '../../components/ProductThumb'
 import { pickErrorMessage, randomToken, statusColor, statusText, yuan } from '../../utils/format'
+import { fillMissingProductCovers } from '../../utils/product-cover'
 import { REGION_DATA } from '../../utils/region-data'
 
 const { Text, Title, Paragraph } = Typography
@@ -93,6 +97,11 @@ export function CheckoutPage() {
   const [createdInfo, setCreatedInfo] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [createdPaymentId, setCreatedPaymentId] = useState<number | null>(null)
+  const [createdOrderIds, setCreatedOrderIds] = useState<number[]>([])
+  const [paymentDetail, setPaymentDetail] = useState<Payment | null>(null)
+  const [alipayQrCode, setAlipayQrCode] = useState('')
+  const [alipayLoading, setAlipayLoading] = useState(false)
 
   // ===== New Address Modal =====
   const [addrModalOpen, setAddrModalOpen] = useState(false)
@@ -106,6 +115,44 @@ export function CheckoutPage() {
   const groupPointCap = Math.max(0, availablePoints)
   const groupTotalCent = activity ? activity.group_price_cent * groupQuantity : 0
 
+  async function prepareAlipayPayment(paymentId: number, orderIds: number[]) {
+    setCreatedPaymentId(paymentId)
+    setCreatedOrderIds(orderIds)
+    setAlipayLoading(true)
+    setAlipayQrCode('')
+    try {
+      const response = await orderService.precreateAlipay(paymentId, true)
+      const data = response.data as AlipayPrecreateResult
+      setPaymentDetail(data.payment)
+      setAlipayQrCode(data.qr_code)
+      setCreatedInfo(`订单已提交，请使用支付宝App扫码完成支付。`)
+    } catch (error) {
+      setMessage(`支付宝二维码生成失败：${pickErrorMessage(error) ?? getApiErrorMessage(error)}`)
+    } finally {
+      setAlipayLoading(false)
+    }
+  }
+
+  async function syncCreatedPayment() {
+    if (!createdPaymentId) return
+    setLoading(true)
+    try {
+      const response = await orderService.syncAlipay(createdPaymentId)
+      setPaymentDetail(response.data)
+      setAlipayQrCode(response.data.alipay_qr_code || alipayQrCode)
+      if (response.data.status === 'paid') {
+        antdMessage.success('支付成功，订单状态已同步')
+        window.setTimeout(() => navigate('/orders'), 800)
+      } else {
+        antdMessage.info('暂未查询到支付成功，请完成扫码支付后再同步')
+      }
+    } catch (error) {
+      setMessage(`同步支付结果失败：${pickErrorMessage(error) ?? getApiErrorMessage(error)}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // ===== Cart checkout =====
   async function loadCheckout() {
     setMessage('')
@@ -116,12 +163,16 @@ export function CheckoutPage() {
         coupon_id: selectedUserCouponId ?? null,
         points_used: pointsToUse,
       })
-      setCheckout(response.data)
-      setSelectedFullDiscountId(response.data.selected_full_discount_id ?? undefined)
-      setSelectedUserCouponId(response.data.selected_coupon_id ?? undefined)
+      const nextCheckout = {
+        ...response.data,
+        items: await fillMissingProductCovers(response.data.items ?? []),
+      }
+      setCheckout(nextCheckout)
+      setSelectedFullDiscountId(nextCheckout.selected_full_discount_id ?? undefined)
+      setSelectedUserCouponId(nextCheckout.selected_coupon_id ?? undefined)
       if (selectedAddressId === null) {
-        const defaultAddress = response.data.addresses.find((address) => address.is_default)
-        setSelectedAddressId(defaultAddress?.id ?? response.data.addresses[0]?.id ?? null)
+        const defaultAddress = nextCheckout.addresses.find((address) => address.is_default)
+        setSelectedAddressId(defaultAddress?.id ?? nextCheckout.addresses[0]?.id ?? null)
       }
     } catch (error) {
       setMessage(`结算预览失败：${pickErrorMessage(error) ?? '请求失败'}`)
@@ -145,7 +196,7 @@ export function CheckoutPage() {
       if (groupBuyMode.kind === 'start') {
         matchedActivity = allActivities.find((item) => item.id === groupBuyMode.activityId) ?? null
         if (!matchedActivity) {
-          setMessage(`未找到拼团活动 #${groupBuyMode.activityId}`)
+          setMessage(`未找到拼团活动 ${groupBuyMode.activityId}`)
           return
         }
       } else {
@@ -158,7 +209,7 @@ export function CheckoutPage() {
           }
         }
         if (!matchedActivity || !matchedGroup) {
-          setMessage(`未找到拼团 #${groupBuyMode.groupId}，可能已成团或失效`)
+          setMessage(`未找到拼团 ${groupBuyMode.groupId}，可能已成团或失效`)
           return
         }
       }
@@ -211,7 +262,7 @@ export function CheckoutPage() {
     setLoading(true)
     try {
       const sourcePostId = checkout.items.find((item) => item.source_post_id)?.source_post_id
-      await orderService.createOrder({
+      const response = await orderService.createOrder({
         client_order_token: randomToken('order'),
         shipping_address_id: selectedAddressId,
         full_discount_id: selectedFullDiscountId ?? null,
@@ -219,7 +270,8 @@ export function CheckoutPage() {
         points_used: pointsToUse,
         source_post_id: sourcePostId ?? undefined,
       })
-      navigate('/orders')
+      const result = response.data
+      await prepareAlipayPayment(result.payment_id, result.order_ids)
     } catch (error) {
       setMessage(`提交订单失败：${pickErrorMessage(error) ?? '请求失败'}`)
     } finally {
@@ -244,24 +296,27 @@ export function CheckoutPage() {
     setLoading(true)
     try {
       const safePoints = Math.min(Math.max(0, pointsToUse), groupPointCap)
+      let result
       if (groupBuyMode?.kind === 'start') {
-        await groupBuyService.startGroup({
+        const response = await groupBuyService.startGroup({
           activity_id: activity.id,
           quantity: groupQuantity,
           shipping_address_id: selectedAddressId,
           points_used: safePoints,
           client_order_token: randomToken('group_start'),
         })
+        result = response.data.order
       } else {
-        await groupBuyService.joinGroup({
+        const response = await groupBuyService.joinGroup({
           group_id: group!.id,
           quantity: groupQuantity,
           shipping_address_id: selectedAddressId,
           points_used: safePoints,
           client_order_token: randomToken('group_join'),
         })
+        result = response.data.order
       }
-      navigate('/orders')
+      await prepareAlipayPayment(result.payment_id, result.order_ids)
     } catch (error) {
       setMessage(`拼团提交失败：${getApiErrorMessage(error)}`)
     } finally {
@@ -382,6 +437,46 @@ export function CheckoutPage() {
     )
   }
 
+  function renderPaymentCard() {
+    if (!createdPaymentId) return null
+    return (
+      <Card className="checkout-card checkout-payment-card" title="支付宝支付">
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Alert
+            type={paymentDetail?.status === 'paid' ? 'success' : 'info'}
+            showIcon
+            message={paymentDetail?.status === 'paid' ? '支付已完成' : '请扫码完成支付'}
+            description={createdInfo || '订单已提交，二维码生成期间请不要重复刷新页面。'}
+          />
+          <div className="checkout-payment-meta">
+            <Text type="secondary">支付单 {createdPaymentId}</Text>
+            <Text type="secondary">订单 {createdOrderIds.map((id) => `${id}`).join('、')}</Text>
+            {paymentDetail ? <Tag color={statusColor(paymentDetail.status)}>{statusText(paymentDetail.status)}</Tag> : null}
+          </div>
+          <Spin spinning={alipayLoading} tip="正在生成支付宝二维码">
+            {alipayQrCode ? (
+              <div className="checkout-qrcode-box">
+                <QRCode value={alipayQrCode} size={192} />
+                <Text type="secondary">请使用支付宝沙箱买家账号扫码</Text>
+              </div>
+            ) : (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={alipayLoading ? '正在生成二维码' : '二维码暂不可用'} />
+            )}
+          </Spin>
+          <Space wrap>
+            <Button disabled={!createdPaymentId || alipayLoading} onClick={() => void prepareAlipayPayment(createdPaymentId, createdOrderIds)}>
+              重新生成二维码
+            </Button>
+            <Button type="primary" disabled={!createdPaymentId} loading={loading} onClick={() => void syncCreatedPayment()}>
+              我已支付，同步结果
+            </Button>
+            <Button onClick={() => navigate('/orders')}>查看订单</Button>
+          </Space>
+        </Space>
+      </Card>
+    )
+  }
+
   // ===== Group-buy mode render =====
   if (isGroupBuyMode) {
     const groupBuyReadyText = !authService.hasToken()
@@ -453,6 +548,7 @@ export function CheckoutPage() {
 
               <div className="checkout-right">
                 <div className="checkout-sticky">
+                  {renderPaymentCard()}
                   <Card
                     className="checkout-card checkout-summary-card"
                     title={<span className="checkout-card-title">金额明细</span>}
@@ -492,17 +588,17 @@ export function CheckoutPage() {
                       <Text strong>支付宝应付</Text>
                       <Text type="secondary">提交后核算</Text>
                     </div>
-                    <Button
-                      type="primary"
-                      block
-                      size="large"
-                      loading={loading}
-                      disabled={!activity || !selectedAddressId}
-                      onClick={() => void handleSubmitGroupBuy()}
-                      className="btn-checkout-submit"
-                    >
-                      提交订单
-                    </Button>
+                  <Button
+                    type="primary"
+                    block
+                    size="large"
+                    loading={loading}
+                    disabled={!activity || !selectedAddressId || !!createdPaymentId}
+                    onClick={() => void handleSubmitGroupBuy()}
+                    className="btn-checkout-submit"
+                  >
+                      {createdPaymentId ? '订单已提交' : '提交并支付'}
+                  </Button>
                     <div className="checkout-back-actions">
                       <Button onClick={() => navigate('/group-buy')}>返回拼团专区</Button>
                       <Button onClick={() => navigate('/orders')}>查看订单</Button>
@@ -559,6 +655,9 @@ export function CheckoutPage() {
                   <div className="checkout-item-list">
                     {checkout.items.map((item) => (
                       <div key={item.sku_id} className="checkout-item-card">
+                        <div className="checkout-item-cover">
+                          <ProductThumb src={item.cover_url} alt={item.product_name} />
+                        </div>
                         <div className="checkout-item-info">
                           <div className="checkout-item-name">{item.product_name}</div>
                           <div className="checkout-item-meta">
@@ -591,6 +690,7 @@ export function CheckoutPage() {
 
             <div className="checkout-right">
               <div className="checkout-sticky">
+                {renderPaymentCard()}
                 <Card
                   className="checkout-card checkout-summary-card"
                   title={<span className="checkout-card-title">结算明细</span>}
@@ -610,7 +710,7 @@ export function CheckoutPage() {
                         ...checkout.available_full_discounts.map((activity) => ({
                           value: activity.id,
                           disabled: !activity.available,
-                          label: `#${activity.id} ${activity.name}｜减 ￥${yuan(activity.discount_amount_cent)}${activity.available ? '' : `｜${activity.unavailable_reason ?? '不可用'}`}`,
+                          label: `${activity.id} ${activity.name}｜减 ￥${yuan(activity.discount_amount_cent)}${activity.available ? '' : `｜${activity.unavailable_reason ?? '不可用'}`}`,
                         })),
                       ]}
                       className="checkout-promo-select"
@@ -630,7 +730,7 @@ export function CheckoutPage() {
                         ...checkout.available_coupons.map((coupon) => ({
                           value: coupon.id,
                           disabled: !coupon.available,
-                          label: `#${coupon.id} ${coupon.name}｜减 ￥${yuan(coupon.discount_amount_cent)}${coupon.available ? '' : `｜${coupon.unavailable_reason ?? '不可用'}`}`,
+                          label: `${coupon.id} ${coupon.name}｜减 ￥${yuan(coupon.discount_amount_cent)}${coupon.available ? '' : `｜${coupon.unavailable_reason ?? '不可用'}`}`,
                         })),
                       ]}
                       className="checkout-promo-select"
@@ -679,12 +779,12 @@ export function CheckoutPage() {
                     type="primary"
                     block
                     size="large"
-                    disabled={checkout.items.length === 0}
+                    disabled={checkout.items.length === 0 || !!createdPaymentId}
                     loading={loading}
                     onClick={() => void handleSubmitCart()}
                     className="btn-checkout-submit"
                   >
-                    提交订单
+                    {createdPaymentId ? '订单已提交' : '提交并支付'}
                   </Button>
                   <Button onClick={() => navigate('/orders')} block>
                     查看订单

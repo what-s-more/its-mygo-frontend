@@ -4,6 +4,9 @@ import type { Address } from './address'
 export type CartItem = {
   sku_id: number
   product_id: number
+  merchant_id: number
+  merchant_name: string
+  merchant_logo_url?: string | null
   product_name: string
   sku_name: string
   price_cent: number
@@ -64,6 +67,7 @@ export type OrderItem = {
   sku_id: number
   product_name: string
   sku_name: string
+  cover_url?: string | null
   unit_price_cent: number
   quantity: number
   total_amount_cent: number
@@ -74,6 +78,8 @@ export type Order = {
   order_no: string
   payment_id: number
   merchant_id: number
+  merchant_name: string
+  merchant_logo_url?: string | null
   status: string
   order_type?: string
   total_amount_cent: number
@@ -86,8 +92,20 @@ export type Order = {
   source_user_id?: number | null
   group_buy_activity_id?: number | null
   group_buy_group_id?: number | null
+  shipping_address?: {
+    receiver_name: string
+    receiver_mobile: string
+    province: string
+    city: string
+    district?: string | null
+    street?: string | null
+    detail_address: string
+    postal_code?: string | null
+    address_tag?: string | null
+  } | null
   logistics_company?: string | null
   tracking_no?: string | null
+  created_at?: string | null
   shipped_at?: string | null
   received_at?: string | null
   items: OrderItem[]
@@ -215,6 +233,10 @@ export const orderService = {
 
   listOrders(params?: { status?: string; page?: number; page_size?: number }) {
     return http.get<unknown, { data: PageResult<Order> }>('/orders', { params })
+  },
+
+  getOrder(orderId: number) {
+    return http.get<unknown, { data: Order }>(`/orders/${orderId}`)
   },
 
   cancelOrder(orderId: number) {

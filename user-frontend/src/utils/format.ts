@@ -11,10 +11,22 @@ export function yuanToCent(value: string) {
 export function absoluteAssetUrl(url?: string | null) {
   if (!url) return undefined
   if (/^https?:\/\//.test(url)) return url
-  return `http://localhost:8000${url}`
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
+  const configuredAssetBase = import.meta.env.VITE_ASSET_BASE_URL
+  const apiBase = String(apiBaseUrl)
+  const assetOrigin = configuredAssetBase
+    ? String(configuredAssetBase).replace(/\/$/, '')
+    : /^https?:\/\//.test(apiBase)
+      ? apiBase.replace(/\/api\/v\d+\/?$/, '').replace(/\/$/, '')
+      : 'http://localhost:8000'
+  return `${assetOrigin}${url.startsWith('/') ? url : `/${url}`}`
 }
 
 const STATUS_TEXT_MAP: Record<string, string> = {
+  pending: '拼团中',
+  success: '已成团',
+  failed: '未成团',
   pending_payment: '待支付',
   group_pending: '待成团',
   pending_shipment: '待发货',

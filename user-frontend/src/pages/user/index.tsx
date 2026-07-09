@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import {
   Avatar,
   Button,
@@ -50,10 +50,12 @@ import { authService, type MemberLevel, type PointsAccount, type PointsLog, type
 import { communityService, type CommunityFavoritePostItem, type CommunityPost, type CommunityComment } from '../../services/community'
 import { productService, type MerchantFollowItem, type ProductFavoriteItem } from '../../services/product'
 import { promotionService, type CouponTemplate, type UserCoupon } from '../../services/promotion'
+import ImgCrop from 'antd-img-crop'
 import { uploadService } from '../../services/upload'
 import { getApiErrorMessage } from '../../services/http'
 import { absoluteAssetUrl, pickErrorMessage, statusText, yuan } from '../../utils/format'
 import { REGION_DATA } from '../../utils/region-data'
+import { CustomerServicePanel } from '../customer-service'
 
 const { Text, Paragraph } = Typography
 
@@ -94,7 +96,7 @@ type AddressFormValues = {
   is_default?: boolean
 }
 
-type SectionTab = 'points' | 'coupons' | 'favorites' | 'follows' | 'addresses' | 'favoritePosts'
+type SectionTab = 'points' | 'coupons' | 'favorites' | 'follows' | 'addresses' | 'favoritePosts' | 'customerService'
 
 function buildRegionText(address: Address) {
   return [address.province, address.city, address.district ?? '', address.street ?? '']
@@ -103,7 +105,6 @@ function buildRegionText(address: Address) {
 }
 
 export function UserCenterPage() {
-  const navigate = useNavigate()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileNickname, setProfileNickname] = useState('')
   const [profileGender, setProfileGender] = useState<string>('')
@@ -487,6 +488,7 @@ export function UserCenterPage() {
     { key: 'favorites', label: `商品收藏 (${favoriteProducts.length})`, icon: <HeartOutlined /> },
     { key: 'favoritePosts', label: `收藏帖子 (${favoritePosts.length})`, icon: <StarOutlined /> },
     { key: 'follows', label: `关注店铺 (${followedMerchants.length})`, icon: <ShopOutlined /> },
+    { key: 'customerService', label: '客服消息', icon: <MessageOutlined /> },
   ]
 
   return (
@@ -496,18 +498,20 @@ export function UserCenterPage() {
         <div className="uc-hero">
           <div className="uc-hero-bg" />
           <div className="uc-hero-content">
-            <Upload {...uploadProps}>
-              <div className="uc-avatar-wrap">
-                <Avatar
-                  size={80}
-                  src={absoluteAssetUrl(profileAvatarUrl) || undefined}
-                  className="uc-avatar"
-                >
-                  {profile?.nickname?.slice(0, 1) ?? 'U'}
-                </Avatar>
-                <div className="uc-avatar-edit"><EditOutlined /></div>
-              </div>
-            </Upload>
+            <ImgCrop cropShape="round" aspect={1} modalTitle="裁剪头像" modalOk="确定" modalCancel="取消">
+              <Upload {...uploadProps}>
+                <div className="uc-avatar-wrap">
+                  <Avatar
+                    size={80}
+                    src={absoluteAssetUrl(profileAvatarUrl) || undefined}
+                    className="uc-avatar"
+                  >
+                    {profile?.nickname?.slice(0, 1) ?? 'U'}
+                  </Avatar>
+                  <div className="uc-avatar-edit"><EditOutlined /></div>
+                </div>
+              </Upload>
+            </ImgCrop>
             <div className="uc-hero-info">
               <div className="uc-hero-name-row">
                 <h1 className="uc-hero-name">{profile?.nickname ?? '用户'}</h1>
@@ -1013,17 +1017,15 @@ export function UserCenterPage() {
               </Spin>
             </Card>
           )}
+
+          {activeTab === 'customerService' && (
+            <Card className="uc-card uc-customer-service-card" title={<span className="uc-card-title">客服消息</span>}>
+              <CustomerServicePanel embedded />
+            </Card>
+          )}
           </div>
         </div>
       </Spin>
-
-      <button
-        className="uc-fab-cs"
-        onClick={() => navigate('/customer-service')}
-        title="联系客服"
-      >
-        <MessageOutlined />
-      </button>
 
       {/* ── Edit Profile Modal ── */}
       <Modal
@@ -1085,7 +1087,7 @@ export function UserCenterPage() {
       {/* ── Create/Edit Address Modal ── */}
       <Modal
         open={addressModalOpen}
-        title={editingAddressId ? `编辑地址 #${editingAddressId}` : '新增收货地址'}
+        title={editingAddressId ? `编辑地址 ${editingAddressId}` : '新增收货地址'}
         onCancel={closeAddressModal}
         width={640}
         footer={[

@@ -12,6 +12,7 @@ import { CustomerServicePage } from '../pages/customer-service'
 import { CommunityPage } from '../pages/community'
 import { GroupBuyPage } from '../pages/group-buy'
 import { MerchantPage } from '../pages/merchant'
+import { OrderDetailPage } from '../pages/order-detail'
 import { OrderPage } from '../pages/order'
 import { ProductDetailPage } from '../pages/product/detail'
 import { ProductPage } from '../pages/product'
@@ -29,19 +30,20 @@ export function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
-      <Route path="/" element={<RequireAuth><ProductPage /></RequireAuth>} />
+      <Route path="/" element={<ProductPage />} />
       <Route path="/products" element={<Navigate to="/" replace />} />
-      <Route path="/products/:productId" element={<RequireAuth><ProductDetailPage /></RequireAuth>} />
-      <Route path="/group-buy" element={<RequireAuth><GroupBuyPage /></RequireAuth>} />
+      <Route path="/products/:productId" element={<ProductDetailPage />} />
+      <Route path="/group-buy" element={<GroupBuyPage />} />
       <Route path="/cart" element={<RequireAuth><CartPage /></RequireAuth>} />
       <Route path="/checkout" element={<RequireAuth><CheckoutPage /></RequireAuth>} />
       <Route path="/orders" element={<RequireAuth><OrderPage /></RequireAuth>} />
-      <Route path="/community" element={<RequireAuth><CommunityPage /></RequireAuth>} />
+      <Route path="/orders/:orderId" element={<RequireAuth><OrderDetailPage /></RequireAuth>} />
+      <Route path="/community" element={<CommunityPage />} />
       <Route path="/customer-service" element={<RequireAuth><CustomerServicePage /></RequireAuth>} />
       <Route path="/promotions" element={<Navigate to="/user" replace />} />
       <Route path="/addresses" element={<Navigate to="/user" replace />} />
       <Route path="/user" element={<RequireAuth><UserCenterPage /></RequireAuth>} />
-      <Route path="/merchants/:merchantId" element={<RequireAuth><MerchantPage /></RequireAuth>} />
+      <Route path="/merchants/:merchantId" element={<MerchantPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

@@ -57,13 +57,6 @@ export function GroupBuyPage() {
           </Paragraph>
         </header>
 
-        {/* ── Notice ── */}
-        <div className="gb-notice">
-          <Text type="secondary">
-            点击「发起拼团」或「加入此团」后，将跳转到结算页选择收货地址、购买件数与积分抵扣，并完成支付宝沙箱支付。拼团不叠加满减或优惠券，不参与种草奖励；首位用户支付后团有效期 24 小时。
-          </Text>
-        </div>
-
         {/* ── Activity Grid ── */}
         <div className="gb-section">
           <Skeleton loading={loading} active paragraph={{ rows: 6 }}>

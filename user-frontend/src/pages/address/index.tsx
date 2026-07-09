@@ -317,7 +317,7 @@ export function AddressPage() {
       {/* ── Create/Edit Modal ── */}
       <Modal
         open={modalOpen}
-        title={editingAddressId ? `编辑地址 #${editingAddressId}` : '新增收货地址'}
+        title={editingAddressId ? `编辑地址 ${editingAddressId}` : '新增收货地址'}
         onCancel={closeModal}
         width={640}
         footer={[

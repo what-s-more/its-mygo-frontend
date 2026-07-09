@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   Badge,
   Button,
@@ -49,8 +48,7 @@ function targetLabel(conversation: CustomerServiceConversation) {
   return conversation.merchant_name ?? '商家客服'
 }
 
-export function CustomerServicePage() {
-  const navigate = useNavigate()
+export function CustomerServicePanel({ embedded = false }: { embedded?: boolean }) {
   const [conversations, setConversations] = useState<CustomerServiceConversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<CustomerServiceConversation | null>(null)
   const [messages, setMessages] = useState<CustomerServiceMessage[]>([])
@@ -233,14 +231,15 @@ export function CustomerServicePage() {
   }
 
   return (
-    <div className="cs-page">
-      {/* 页面标题 */}
-      <header className="cs-header">
-        <Title level={3} className="cs-header-title">
-          <CustomerServiceOutlined /> 客服消息
-        </Title>
-        <Paragraph className="cs-header-sub">联系平台或商家客服，咨询订单与商品问题</Paragraph>
-      </header>
+    <div className={embedded ? 'cs-page cs-page-embedded' : 'cs-page'}>
+      {!embedded && (
+        <header className="cs-header">
+          <Title level={3} className="cs-header-title">
+            <CustomerServiceOutlined /> 客服消息
+          </Title>
+          <Paragraph className="cs-header-sub">联系平台或商家客服，咨询订单与商品问题</Paragraph>
+        </header>
+      )}
 
       <div className="cs-main-layout">
         {/* 左栏：会话列表 */}
@@ -383,4 +382,8 @@ export function CustomerServicePage() {
       </div>
     </div>
   )
+}
+
+export function CustomerServicePage() {
+  return <CustomerServicePanel />
 }

@@ -16,6 +16,7 @@ import {
   type MerchantFollowStatus,
   type ProductListItem,
 } from '../../services/product'
+import { authService } from '../../services/auth'
 import { promotionService, type CouponTemplate } from '../../services/promotion'
 import { absoluteAssetUrl, pickErrorMessage, yuan } from '../../utils/format'
 
@@ -42,12 +43,12 @@ export function MerchantPage() {
       const [merchantResponse, productResponse, followResponse] = await Promise.all([
         productService.getMerchant(numericMerchantId),
         productService.listMerchantProducts(numericMerchantId, buildProductParams()),
-        productService.getMerchantFollowStatus(numericMerchantId),
+        authService.hasToken() ? productService.getMerchantFollowStatus(numericMerchantId) : Promise.resolve(null),
       ])
       setMerchant(merchantResponse.data)
       setProducts(productResponse.data.list)
       setTotal(productResponse.data.total)
-      setFollowStatus(followResponse.data)
+      setFollowStatus(followResponse?.data ?? null)
     } catch (error) {
       message.error(pickErrorMessage(error) ?? '店铺信息加载失败')
     } finally {
@@ -66,6 +67,11 @@ export function MerchantPage() {
   }
 
   async function claimCoupon(couponId: number) {
+    if (!authService.hasToken()) {
+      message.info('登录后即可领取优惠券')
+      navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`)
+      return
+    }
     try {
       await promotionService.claimCoupon(couponId)
       message.success('优惠券领取成功')
@@ -76,6 +82,11 @@ export function MerchantPage() {
   }
 
   async function toggleFollow() {
+    if (!authService.hasToken()) {
+      message.info('登录后即可关注店铺')
+      navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`)
+      return
+    }
     try {
       const response = followStatus?.followed
         ? await productService.unfollowMerchant(numericMerchantId)
@@ -139,7 +150,7 @@ export function MerchantPage() {
                 </div>
               )}
               <div className="shop-hero-info">
-                <h1 className="shop-name">{merchant?.name ?? `店铺 #${numericMerchantId}`}</h1>
+                <h1 className="shop-name">{merchant?.name ?? '未知店铺'}</h1>
                 <div className="shop-hero-meta">
                   <Tag className="shop-tag-stat">在售 {total}</Tag>
                   <Tag className="shop-tag-follow">

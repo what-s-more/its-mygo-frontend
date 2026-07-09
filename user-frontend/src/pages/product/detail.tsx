@@ -4,6 +4,7 @@ import {
   Card,
   Empty,
   Image,
+  Input,
   InputNumber,
   List,
   Rate,
@@ -22,11 +23,17 @@ import {
   FireOutlined,
   ShopOutlined,
   CustomerServiceOutlined,
+  CloseOutlined,
+  SendOutlined,
 } from '@ant-design/icons'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { authService } from '../../services/auth'
-import { customerService } from '../../services/customerService'
+import {
+  customerService,
+  type CustomerServiceConversation,
+  type CustomerServiceMessage,
+} from '../../services/customerService'
 import { getApiErrorMessage } from '../../services/http'
 import { groupBuyService, type GroupBuyActivity } from '../../services/groupBuy'
 import { orderService } from '../../services/order'
@@ -65,6 +72,13 @@ export function ProductDetailPage() {
   const [loading, setLoading] = useState(false)
   const [activeImageIndex, setActiveImageIndex] = useState(0)
   const [groupBuyActivity, setGroupBuyActivity] = useState<GroupBuyActivity | null>(null)
+  const [showAllReviews, setShowAllReviews] = useState(false)
+  const [merchantChatOpen, setMerchantChatOpen] = useState(false)
+  const [merchantConversation, setMerchantConversation] = useState<CustomerServiceConversation | null>(null)
+  const [merchantMessages, setMerchantMessages] = useState<CustomerServiceMessage[]>([])
+  const [merchantChatInput, setMerchantChatInput] = useState('')
+  const [merchantChatLoading, setMerchantChatLoading] = useState(false)
+  const [merchantChatSending, setMerchantChatSending] = useState(false)
 
   const selectedSku = useMemo(() => {
     return product?.skus.find((sku) => sku.id === selectedSkuId) ?? product?.skus[0]
@@ -79,6 +93,21 @@ export function ProductDetailPage() {
     return urls
   }, [product])
 
+  const visibleReviews = useMemo(() => (showAllReviews ? reviews : reviews.slice(0, 3)), [reviews, showAllReviews])
+
+  function requireLogin(actionText: string) {
+    if (authService.hasToken()) return true
+    message.info(`登录后即可${actionText}`)
+    navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`)
+    return false
+  }
+
+  function formatChatTime(time: string) {
+    const date = new Date(time)
+    if (Number.isNaN(date.getTime())) return ''
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  }
+
   async function loadProduct(id: number) {
     setLoading(true)
     try {
@@ -87,10 +116,10 @@ export function ProductDetailPage() {
           message.error(`商品详情加载失败：${getApiErrorMessage(error)}`)
           return null
         }),
-        productService.getProductFavoriteStatus(id).catch((error) => {
+        authService.hasToken() ? productService.getProductFavoriteStatus(id).catch((error) => {
           message.error(`商品收藏状态加载失败：${getApiErrorMessage(error)}`)
           return null
-        }),
+        }) : Promise.resolve(null),
       ])
       if (detailResponse) {
         const data = detailResponse.data as ProductDetail
@@ -136,28 +165,46 @@ export function ProductDetailPage() {
 
   async function contactMerchant() {
     if (!product) return
-    if (!authService.hasToken()) {
-      message.warning('请先登录用户账号')
-      return
-    }
+    if (!requireLogin('咨询商家')) return
+    setMerchantChatOpen(true)
+    setMerchantChatLoading(true)
     try {
-      await customerService.createConversation({
+      const conversationResponse = await customerService.createConversation({
         target_type: 'merchant',
         merchant_id: product.merchant.id,
         product_id: product.id,
       })
-      navigate('/customer-service')
+      const conversation = conversationResponse.data
+      setMerchantConversation(conversation)
+      const messagesResponse = await customerService.listMessages(conversation.id, { page_size: 50 })
+      setMerchantMessages(messagesResponse.data.list ?? [])
     } catch (error) {
       message.error(`创建客服会话失败：${getApiErrorMessage(error)}`)
+      setMerchantChatOpen(false)
+    } finally {
+      setMerchantChatLoading(false)
+    }
+  }
+
+  async function sendMerchantMessage() {
+    if (!merchantConversation) return
+    const content = merchantChatInput.trim()
+    if (!content) return
+    setMerchantChatSending(true)
+    try {
+      const response = await customerService.sendMessage(merchantConversation.id, { content })
+      setMerchantMessages((items) => [...items, response.data])
+      setMerchantChatInput('')
+    } catch (error) {
+      message.error(`发送消息失败：${getApiErrorMessage(error)}`)
+    } finally {
+      setMerchantChatSending(false)
     }
   }
 
   async function toggleFavorite() {
     if (!product) return
-    if (!authService.hasToken()) {
-      message.warning('请先登录用户账号')
-      return
-    }
+    if (!requireLogin('收藏商品')) return
     try {
       const response = favoriteStatus?.favorited
         ? await productService.unfavoriteProduct(product.id)
@@ -171,6 +218,7 @@ export function ProductDetailPage() {
 
   async function addCart() {
     if (!selectedSku) return
+    if (!requireLogin('加入购物车')) return
     try {
       await orderService.addCartItem({
         sku_id: selectedSku.id,
@@ -187,6 +235,7 @@ export function ProductDetailPage() {
     if (Number.isFinite(productId)) {
       setProduct(null)
       setReviews([])
+      setShowAllReviews(false)
       setQuantity(1)
       setReviewFilterScore(undefined)
       setReviewOnlyWithImage(false)
@@ -395,49 +444,8 @@ export function ProductDetailPage() {
               </div>
             </div>
 
-            {/* ── Tabs: Description + Reviews ── */}
+            {/* ── Reviews + Description ── */}
             <div className="detail-tabs">
-              {/* Description Tab */}
-              <Card
-                className="detail-tab-card"
-                title={<span className="detail-tab-title">图文详情</span>}
-              >
-                <Paragraph style={{ whiteSpace: 'pre-line' }}>{product.description || '暂无描述'}</Paragraph>
-                {productImages.length > 0 && (
-                  <div className="detail-content-images">
-                    <Image.PreviewGroup>
-                      {productImages.map((url, index) => (
-                        <Image
-                          key={`${url}-content-${index}`}
-                          src={absoluteAssetUrl(url)}
-                          className="detail-content-image"
-                        />
-                      ))}
-                    </Image.PreviewGroup>
-                  </div>
-                )}
-              </Card>
-
-              {/* Detail Images */}
-              {product.detail_images && product.detail_images.length > 0 && (
-                <Card
-                  className="detail-tab-card"
-                  title={<span className="detail-tab-title">商品详情</span>}
-                >
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {product.detail_images.map((url, index) => (
-                      <img
-                        key={`${url}-detail-${index}`}
-                        src={absoluteAssetUrl(url)}
-                        alt={`商品详情图 ${index + 1}`}
-                        style={{ width: '100%', borderRadius: 10, display: 'block' }}
-                      />
-                    ))}
-                  </div>
-                </Card>
-              )}
-
-              {/* Reviews Tab */}
               <Card
                 className="detail-tab-card"
                 title={<span className="detail-tab-title">商品评价</span>}
@@ -464,7 +472,7 @@ export function ProductDetailPage() {
               >
                 <List
                   size="small"
-                  dataSource={reviews}
+                  dataSource={visibleReviews}
                   locale={{ emptyText: '暂无公开评价' }}
                   renderItem={(review) => (
                     <List.Item className="detail-review-item">
@@ -474,7 +482,7 @@ export function ProductDetailPage() {
                             <Avatar size="small" src={absoluteAssetUrl(review.user_avatar_url)}>
                               {review.user_nickname?.[0] ?? '用'}
                             </Avatar>
-                            <Text type="secondary">{review.user_nickname || `用户 #${review.user_id}`}</Text>
+                            <Text type="secondary">{review.user_nickname || `用户 ${review.user_id}`}</Text>
                           </Space>
                           <Rate disabled value={review.score} className="detail-rate-sm" />
                         </div>
@@ -498,8 +506,99 @@ export function ProductDetailPage() {
                     </List.Item>
                   )}
                 />
+                {reviews.length > 3 ? (
+                  <div className="detail-review-more">
+                    <Button type="link" onClick={() => setShowAllReviews((value) => !value)}>
+                      {showAllReviews ? '收起评价' : `查看全部 ${reviews.length} 条评价`}
+                    </Button>
+                  </div>
+                ) : null}
+              </Card>
+
+              <Card
+                className="detail-tab-card"
+                title={<span className="detail-tab-title">图文详情</span>}
+              >
+                <Paragraph style={{ whiteSpace: 'pre-line' }}>{product.description || '暂无文字介绍'}</Paragraph>
+                {product.detail_images && product.detail_images.length > 0 ? (
+                  <div className="detail-content-images">
+                    {product.detail_images.map((url, index) => (
+                      <img
+                        key={`${url}-detail-${index}`}
+                        src={absoluteAssetUrl(url)}
+                        alt={`商品详情图 ${index + 1}`}
+                        className="detail-content-image"
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <Text type="secondary">暂无详情图片</Text>
+                )}
               </Card>
             </div>
+
+            {merchantChatOpen && (
+              <div className="detail-chat-panel">
+                <div className="detail-chat-header">
+                  <div>
+                    <Text strong>商家客服</Text>
+                    <div className="detail-chat-subtitle">
+                      {product.merchant.name}
+                      {merchantConversation?.product_name ? ` · ${merchantConversation.product_name}` : ''}
+                    </div>
+                  </div>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<CloseOutlined />}
+                    onClick={() => setMerchantChatOpen(false)}
+                  />
+                </div>
+                <div className="detail-chat-messages">
+                  {merchantChatLoading ? (
+                    <Skeleton active paragraph={{ rows: 4 }} />
+                  ) : merchantMessages.length === 0 ? (
+                    <Empty
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      description="可以直接向商家咨询商品规格、库存和发货等问题"
+                    />
+                  ) : (
+                    merchantMessages.map((item) => {
+                      const isSelf = item.sender_type === 'user'
+                      return (
+                        <div
+                          key={item.id}
+                          className={`detail-chat-message ${isSelf ? 'detail-chat-message-self' : ''}`}
+                        >
+                          <div className="detail-chat-bubble">
+                            <span>{item.content}</span>
+                            <em>{formatChatTime(item.created_at)}</em>
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+                <div className="detail-chat-input">
+                  <Input
+                    value={merchantChatInput}
+                    onChange={(event) => setMerchantChatInput(event.target.value)}
+                    onPressEnter={() => void sendMerchantMessage()}
+                    placeholder="请输入咨询内容"
+                    disabled={!merchantConversation || merchantChatLoading}
+                  />
+                  <Button
+                    type="primary"
+                    icon={<SendOutlined />}
+                    loading={merchantChatSending}
+                    disabled={!merchantConversation || !merchantChatInput.trim()}
+                    onClick={() => void sendMerchantMessage()}
+                  >
+                    发送
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <Empty description="商品不存在或已下架">

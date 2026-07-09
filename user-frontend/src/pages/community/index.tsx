@@ -4,6 +4,7 @@ import {
   Avatar,
   Button,
   Card,
+  Checkbox,
   Divider,
   Empty,
   Image,
@@ -43,6 +44,7 @@ import { getApiErrorMessage } from '../../services/http'
 import { orderService } from '../../services/order'
 import { productService, type ProductDetail, type ProductListItem } from '../../services/product'
 import { uploadService } from '../../services/upload'
+import { ProductThumb } from '../../components/ProductThumb'
 import {
   absoluteAssetUrl,
   pickErrorMessage,
@@ -125,18 +127,20 @@ export function CommunityPage() {
     return Array.from(ids)
   }, [posts, selectedPost, selectedCommunityUserPosts])
 
-  const postProductOptions = useMemo(() => {
+  const postProductChoices = useMemo(() => {
     const map = new Map<number, ProductListItem>()
     postProductSearchResults.forEach((product) => map.set(product.id, product))
     selectedPostProductIds.forEach((id) => {
       const product = communityProductMap[id]
       if (product) map.set(id, product)
     })
-    return Array.from(map.values()).map((product) => ({
-      value: product.id,
-      label: `#${product.id} ${product.name} / ${product.merchant_name} / ￥${yuan(product.price_cent)}`,
-    }))
+    return Array.from(map.values())
   }, [postProductSearchResults, selectedPostProductIds, communityProductMap])
+
+  const selectedPostProducts = useMemo(
+    () => selectedPostProductIds.map((id) => communityProductMap[id]).filter(Boolean),
+    [selectedPostProductIds, communityProductMap],
+  )
 
   const uploadFiles: UploadFile[] = postImages.map((url, index) => ({
     uid: `${index}`,
@@ -217,6 +221,11 @@ export function CommunityPage() {
   }
 
   async function createPost(type: 'normal' | 'grass') {
+    if (!authService.hasToken()) {
+      message.info('登录后即可发布内容')
+      navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`)
+      return
+    }
     try {
       await communityService.createPost({
         type,
@@ -228,6 +237,7 @@ export function CommunityPage() {
         image_urls: postImages,
       })
       setPostImages([])
+      setSelectedPostProductIds([])
       message.success(type === 'grass' ? '种草帖已发布' : '普通帖已发布')
       await loadPosts()
       await loadCommunityTopics()
@@ -241,6 +251,11 @@ export function CommunityPage() {
   }
 
   async function commentPost(postId: number) {
+    if (!authService.hasToken()) {
+      message.info('登录后即可发表评论')
+      navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`)
+      return
+    }
     const data = await run<CommunityComment>('发表评论', () => communityService.createComment(postId, commentContent))
     if (data && selectedPost) {
       message.success('评论已发表')
@@ -257,6 +272,11 @@ export function CommunityPage() {
   }
 
   async function likePost(postId: number) {
+    if (!authService.hasToken()) {
+      message.info('登录后即可点赞')
+      navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`)
+      return
+    }
     const data = await run<{ liked: boolean; like_count: number }>('点赞', () => communityService.likePost(postId))
     if (data) {
       setLikedPosts((current) => {
@@ -277,6 +297,11 @@ export function CommunityPage() {
   }
 
   async function favoritePost(postId: number) {
+    if (!authService.hasToken()) {
+      message.info('登录后即可收藏帖子')
+      navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`)
+      return
+    }
     const data = await run<{ favorited: boolean; favorite_count: number }>('收藏', () =>
       communityService.favoritePost(postId),
     )
@@ -299,6 +324,11 @@ export function CommunityPage() {
   }
 
   async function deletePost(postId: number) {
+    if (!authService.hasToken()) {
+      message.info('请先登录')
+      navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`)
+      return
+    }
     try {
       await communityService.deletePost(postId)
       message.success('帖子已删除')
@@ -311,6 +341,11 @@ export function CommunityPage() {
   }
 
   async function uploadPostImage(file: File) {
+    if (!authService.hasToken()) {
+      message.info('登录后即可上传图片')
+      navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`)
+      return false
+    }
     const data = await run<{ url: string }>('上传帖子图片', () => uploadService.uploadImage(file))
     if (data?.url) setPostImages((items) => [...items, data.url])
     return false
@@ -349,6 +384,15 @@ export function CommunityPage() {
     navigate(url)
   }
 
+  function togglePostProduct(product: ProductListItem, checked?: boolean) {
+    setCommunityProductMap((current) => ({ ...current, [product.id]: product }))
+    setSelectedPostProductIds((current) => {
+      const nextChecked = checked ?? !current.includes(product.id)
+      if (nextChecked) return current.includes(product.id) ? current : [...current, product.id]
+      return current.filter((id) => id !== product.id)
+    })
+  }
+
   function renderCommunityProductCards(productIds: number[], compact = false, sourcePostId?: number) {
     if (productIds.length === 0) {
       return <Text type="secondary">暂无关联商品</Text>
@@ -381,13 +425,13 @@ export function CommunityPage() {
                     <Text strong ellipsis style={{ maxWidth: compact ? 135 : 260 }}>
                       {product.name}
                     </Text>
-                    <Text type="secondary">商品 #{product.id} / {product.merchant_name}</Text>
+                    <Text type="secondary">{product.merchant_name}</Text>
                     <Text className="community-product-price">￥{yuan(product.price_cent)}</Text>
                   </Space>
                 </Space>
               ) : (
                 <Space direction="vertical" size={2}>
-                  <Text strong>商品 #{productId}</Text>
+                  <Text strong>商品 {productId}</Text>
                   <Text type="secondary">正在加载商品信息</Text>
                 </Space>
               )}
@@ -414,13 +458,13 @@ export function CommunityPage() {
   }, [])
 
   useEffect(() => {
+    if (!authService.hasToken()) return
     void (async () => {
       try {
         const response = await authService.profile()
         setCurrentUserId(response.data.id)
       } catch {
-        // 页面受 RequireAuth 守卫保护，正常情况不会进入此分支；
-        // 若获取失败则不显示删除按钮，不影响其他功能
+        // 游客或登录失效时不显示删除按钮，不影响公开浏览
       }
     })()
   }, [])
@@ -766,21 +810,74 @@ export function CommunityPage() {
             options={POST_SECTION_OPTIONS}
             className="comm-form-input"
           />
-          <Select
-            mode="multiple"
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            filterOption={false}
-            style={{ width: '100%' }}
-            value={selectedPostProductIds}
-            onChange={setSelectedPostProductIds}
-            onSearch={(value) => searchPostProducts(value)}
-            onFocus={() => searchPostProducts()}
-            options={postProductOptions}
-            placeholder="搜索并选择关联商品；种草帖需选择已完成订单商品"
-            className="comm-form-input"
-          />
+          <div className="comm-product-picker">
+            <Space direction="vertical" size={10} style={{ width: '100%' }}>
+              <Input.Search
+                value={postProductSearchKeyword}
+                allowClear
+                enterButton="搜索商品"
+                placeholder="搜索商品名称或输入商品 ID；种草帖需选择已完成订单购买过的商品"
+                onChange={(event) => setPostProductSearchKeyword(event.target.value)}
+                onSearch={(value) => void searchPostProducts(value)}
+                onFocus={() => {
+                  if (postProductSearchResults.length === 0) void searchPostProducts(postProductSearchKeyword)
+                }}
+              />
+              {selectedPostProducts.length > 0 ? (
+                <div className="comm-selected-products">
+                  <Text type="secondary">已选关联商品</Text>
+                  <div className="comm-selected-product-list">
+                    {selectedPostProducts.map((product) => (
+                      <Tag
+                        key={product.id}
+                        closable
+                        onClose={(event) => {
+                          event.preventDefault()
+                          togglePostProduct(product, false)
+                        }}
+                      >
+                        {product.id} {product.name}
+                      </Tag>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <div className="comm-product-choice-grid">
+                {postProductChoices.length === 0 ? (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="搜索后选择要关联的商品" />
+                ) : (
+                  postProductChoices.map((product) => {
+                    const checked = selectedPostProductIds.includes(product.id)
+                    return (
+                      <button
+                        key={product.id}
+                        type="button"
+                        className={`comm-product-choice ${checked ? 'comm-product-choice-active' : ''}`}
+                        onClick={() => togglePostProduct(product)}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => togglePostProduct(product, event.target.checked)}
+                        />
+                        <ProductThumb
+                          src={product.cover_url}
+                          alt={product.name}
+                          className="comm-product-choice-img"
+                          placeholderClassName="comm-product-choice-placeholder"
+                        />
+                        <span className="comm-product-choice-info">
+                          <Text strong ellipsis>{product.name}</Text>
+                          <Text type="secondary" ellipsis>{product.merchant_name}</Text>
+                          <Text className="community-product-price">￥{yuan(product.price_cent)}</Text>
+                        </span>
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+            </Space>
+          </div>
           <Input
             value={postTopicTags}
             onChange={(event) => setPostTopicTags(event.target.value)}
@@ -835,7 +932,7 @@ export function CommunityPage() {
               </Avatar>
               <div className="comm-user-info">
                 <Title level={4} style={{ margin: 0 }}>{selectedCommunityUser.user.nickname}</Title>
-                <Text type="secondary">社区用户 #{selectedCommunityUser.user.id}</Text>
+                <Text type="secondary">社区用户 {selectedCommunityUser.user.id}</Text>
               </div>
             </div>
             <div className="comm-user-stats">
